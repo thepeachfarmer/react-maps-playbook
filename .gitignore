@@ -1,0 +1,24 @@
+# Keys and local settings: never commit. /secrets/ is anchored to the repo root on purpose:
+# a bare "secrets/" would also ignore scripts/secrets/, which holds the scanner.
+/secrets/
+.env
+.env.*
+*.env
+!.env.example
+!*.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+*-service-account.json
+
+# Files you drop for the agent, and files it makes for you
+inbox/
+outbox/
+
+# Build output, tool environments and OS clutter
+node_modules/
+dist/
+.venv/
+__pycache__/
+.DS_Store

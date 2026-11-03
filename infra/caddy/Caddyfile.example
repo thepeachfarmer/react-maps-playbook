@@ -1,0 +1,193 @@
+# Caddyfile.example: Caddy as the front door for your map apps.
+#
+# Copy it to conf/Caddyfile, replace example.com with your domain, and delete
+# the sections you don't need. Every hostname, port and address here is a
+# placeholder (example.com is reserved for documentation, so an unedited copy
+# can't reach anyone's real server). docs/13-https-with-caddy.md explains
+# each part.
+#
+#   0. Global options and two reusable snippets
+#   1. One app on its own hostname (start here)
+#   2. More apps, one block per hostname, plus the identity provider
+#   3. An app with no login code of its own, protected by Authentik forward_auth
+#   4. Behind Cloudflare: one wildcard certificate through DNS-01
+#      (commented out; it needs a Caddy build with the Cloudflare plugin)
+#
+# Check it before every reload:
+#   docker run --rm -v "$PWD/conf:/etc/caddy" caddy:2.11-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+# Reload a running Caddy without dropping connections:
+#   docker compose exec -w /etc/caddy caddy caddy reload
+
+# ─── 0. Global options ──────────────────────────────────────────────────────
+{
+	# Let's Encrypt emails this address if a certificate is close to expiring
+	# and renewal keeps failing. Use a mailbox someone reads.
+	email admin@example.com
+
+	# While you're testing, use Let's Encrypt's staging server so failed
+	# attempts don't use up the real rate limits. Browsers warn about staging
+	# certificates. Delete this line once everything works, then restart Caddy.
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# Snippet: what every site gets. Use it with "import common".
+(common) {
+	# Compress text (HTML, JS, CSS, JSON, GeoJSON) on the way out. Caddy skips
+	# images and map tiles, which are already compressed.
+	encode zstd gzip
+
+	header {
+		# "Only ever use HTTPS for this host, for a year." Add it once HTTPS
+		# works. Leave includeSubDomains off unless EVERY subdomain has HTTPS.
+		Strict-Transport-Security "max-age=31536000"
+		# Don't let the browser guess file types.
+		X-Content-Type-Options "nosniff"
+		# Send only the origin (not the full URL, which may hold a share
+		# token) when someone follows a link to another site.
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Don't advertise the server software.
+		-Server
+	}
+
+	# One line per request in `docker logs`. The fastest way to see whether a
+	# request reached Caddy at all.
+	log
+}
+
+# Snippet: send a request to Authentik first; only signed-in people get
+# through. Use it INSIDE a route block (see section 3), because order matters.
+(authentik_forward_auth) {
+	# Never trust identity headers that arrive from the browser. Delete them,
+	# so the only X-Authentik-* headers the app sees are the ones Authentik set.
+	request_header -X-Authentik-*
+
+	# Authentik's own pages for this app (login callback, sign out).
+	reverse_proxy /outpost.goauthentik.io/* authentik-server:9000
+
+	forward_auth authentik-server:9000 {
+		uri /outpost.goauthentik.io/auth/caddy
+		# Capitalisation matters here, or the headers arrive empty.
+		copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email X-Authentik-Name X-Authentik-Uid
+		trusted_proxies private_ranges
+	}
+}
+
+# ─── 1. One app ─────────────────────────────────────────────────────────────
+# Needs: a DNS A record for maps.example.com pointing at this server's
+# public IP, and ports 80 and 443 open to the internet. Caddy then gets the
+# certificate and renews it on its own. There's nothing else to set up.
+maps.example.com {
+	import common
+
+	# The app publishes port 8080 on the Docker host. host.docker.internal
+	# works because Caddy's compose file maps it to the host (see README.md).
+	reverse_proxy host.docker.internal:8080
+}
+
+# ─── 2. More apps ───────────────────────────────────────────────────────────
+# One block per hostname. Each gets its own certificate.
+
+# The identity provider. NEVER put forward_auth in front of it: it would try
+# to sign you in to the sign-in page, forever.
+auth.example.com {
+	import common
+	# The container name, reachable because Authentik and Caddy share the
+	# "edge" Docker network (infra/authentik/docker-compose.yml).
+	reverse_proxy authentik-server:9000
+}
+
+# A split app: nginx serves the React build, and the API is its own container.
+# Both containers join the "edge" network, so Caddy can use their names.
+fleet.example.com {
+	import common
+
+	handle /api/* {
+		reverse_proxy fleet-api:8000
+	}
+
+	# WebSockets need nothing special: reverse_proxy passes the upgrade through.
+	handle /ws {
+		reverse_proxy fleet-api:8000
+	}
+
+	handle {
+		reverse_proxy fleet-web:80
+	}
+}
+
+# An old hostname that moved. 302 until you're sure, then add "permanent".
+maps-old.example.com {
+	redir https://maps.example.com{uri}
+}
+
+# ─── 3. An app with no login of its own (forward_auth) ──────────────────────
+# Authentik checks every request before it reaches the app. Use this for
+# off-the-shelf tools. Apps that do OIDC themselves (section 1 and the
+# example/server in this repo) must NOT also get forward_auth.
+#
+# The tool joins the "edge" Docker network and publishes NO port, so the only
+# way to reach it is through Caddy and the login. Don't use
+# host.docker.internal here: that needs a port published on the host, and
+# anyone who reaches a published port skips the login (Docker's published
+# ports also go around ufw). "tools-app" is the tool's container name.
+tools.example.com {
+	import common
+
+	# "route" keeps the lines in the order written: strip headers, ask
+	# Authentik, then proxy.
+	route {
+		import authentik_forward_auth
+		reverse_proxy tools-app:8090
+	}
+}
+
+# ─── 4. Behind Cloudflare: one wildcard certificate (DNS-01) ────────────────
+# Use this INSTEAD of sections 1 to 3 when your DNS is on Cloudflare. Caddy
+# proves it owns the domain by writing a temporary DNS record through the
+# Cloudflare API. Port 80 doesn't have to be reachable, and it works for
+# LAN-only apps too.
+#
+# Needs:
+#   - Caddy built with the Cloudflare DNS plugin. The stock caddy image fails
+#     with "module not registered: dns.providers.cloudflare". See README.md.
+#   - CLOUDFLARE_API_TOKEN in Caddy's environment: a scoped token with
+#     Zone:Zone:Read and Zone:DNS:Edit for this zone only. Put it in a
+#     gitignored env file or your Portainer stack env. Never put it here.
+#   - Cloudflare SSL/TLS mode set to "Full (strict)". Never "Flexible".
+#
+# The wildcard covers app.example.com, not example.com itself.
+#
+# *.example.com {
+# 	import common
+#
+# 	tls {
+# 		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+# 		# Ask Cloudflare's resolver whether the record is there yet. Local
+# 		# or split-horizon DNS often answers with an old, cached "no".
+# 		resolvers 1.1.1.1
+# 	}
+#
+# 	@auth host auth.example.com
+# 	handle @auth {
+# 		reverse_proxy authentik-server:9000
+# 	}
+#
+# 	@maps host maps.example.com
+# 	handle @maps {
+# 		reverse_proxy host.docker.internal:8080
+# 	}
+#
+# 	@tools host tools.example.com
+# 	handle @tools {
+# 		route {
+# 			import authentik_forward_auth
+# 			reverse_proxy tools-app:8090
+# 		}
+# 	}
+#
+# 	# Any other name under the wildcard gets a plain 404. A typo or a
+# 	# forgotten app never shows someone else's site.
+# 	handle {
+# 		respond "Not found" 404
+# 	}
+# }

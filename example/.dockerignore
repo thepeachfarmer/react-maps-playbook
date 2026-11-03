@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.github
+.env
+.env.*
+*.env
+secrets
+*.log
+.DS_Store
+README.md

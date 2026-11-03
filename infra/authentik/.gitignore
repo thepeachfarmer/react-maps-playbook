@@ -1,0 +1,5 @@
+# Real secrets live in .env next to the compose file. Never commit it.
+.env
+.env.*
+!.env.example
+*.env

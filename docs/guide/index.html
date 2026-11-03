@@ -1,0 +1,1723 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How our maps work</title>
+<!--
+  Source of docs/how-our-maps-work.pdf. Letter size, one <section class="page"> per printed page.
+  Rebuild (macOS):
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --no-pdf-header-footer \
+      --print-to-pdf=docs/how-our-maps-work.pdf "file://$PWD/docs/guide/index.html"
+  Open it with ?debug in a browser to outline any page whose content doesn't fit.
+  Everything shown is invented demo data. Placeholders only: example.com, 203.0.113.10, <token>.
+-->
+<style>
+@page { size: 8.5in 11in; margin: 0; }
+:root {
+  --ink: #16212c; --ink2: #2c3a48; --muted: #5a6777; --soft: #8a96a4; --line: #e0e5eb; --bg: #f4f6f8;
+  --teal: #0f766e; --teal2: #0d9488; --teal-soft: #e5f4f1; --teal-line: #9fd8cf;
+  --navy: #162130; --navy2: #1f2b3c;
+  --amber: #b45309; --amber-bar: #f59e0b; --amber-soft: #fff4dd;
+  --red: #b91c1c; --red-soft: #fdeded; --green: #15803d; --green-soft: #e9f6ed;
+  --violet: #4f46e5; --violet-soft: #eef0fd;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #cfd5dc; }
+body {
+  font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: var(--ink); font-size: 10pt; line-height: 1.45;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  counter-reset: page;
+  font-variant-numeric: lining-nums;
+}
+.page {
+  width: 8.5in; height: 11in; margin: 0.25in auto; background: #fff; position: relative; overflow: hidden;
+  break-after: page; page-break-after: always; counter-increment: page;
+  padding: 0.5in 0.65in 0.72in; display: flex; flex-direction: column;
+  box-shadow: 0 2px 12px rgba(0,0,0,.15);
+}
+.page:last-child { break-after: auto; page-break-after: auto; }
+@media print { html, body { background: #fff; } .page { margin: 0; box-shadow: none; } }
+.runhead {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 7pt; letter-spacing: .09em; text-transform: uppercase; color: var(--soft); font-weight: 600;
+  border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 16px; flex: none;
+}
+.runhead b { color: var(--teal); font-weight: 700; }
+.folio {
+  position: absolute; bottom: 0.36in; left: 0.65in; right: 0.65in; display: flex; justify-content: space-between;
+  font-size: 7.5pt; color: var(--soft); letter-spacing: .03em;
+}
+.folio .n::after { content: counter(page); font-weight: 700; color: var(--ink2); }
+.content { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.content > * { flex-shrink: 0; }
+.overflowing .content { outline: 3px solid red; }
+.overflowing::after { content: "CONTENT OVERFLOWS"; position: absolute; top: 4px; right: 8px; color: #fff; background: red; font: 700 10px sans-serif; padding: 2px 6px; }
+
+p { margin: 0 0 7px; }
+a { color: inherit; text-decoration: none; }
+strong, b { font-weight: 700; }
+h2 { font-size: 12.5pt; line-height: 1.25; margin: 12px 0 5px; font-weight: 700; letter-spacing: -.005em; }
+h2:first-child { margin-top: 0; }
+h3 { font-size: 7.6pt; letter-spacing: .11em; text-transform: uppercase; color: var(--teal); font-weight: 700; margin: 12px 0 5px; }
+h3:first-child { margin-top: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 8.8pt; }
+.xs { font-size: 8pt; }
+
+.chap { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; align-items: start; margin: 0 0 14px; flex: none; }
+.chap .num { font-size: 44pt; font-weight: 700; color: var(--teal); line-height: .92; letter-spacing: -.03em; }
+.chap h1 { font-size: 22pt; line-height: 1.08; margin: 1px 0 5px; font-weight: 700; letter-spacing: -.012em; }
+.chap .lede { font-size: 11.2pt; color: var(--muted); margin: 0; line-height: 1.4; }
+.chap.cont .num { font-size: 30pt; }
+.chap.cont h1 { font-size: 17pt; margin-top: 3px; }
+
+.cols { display: grid; grid-template-columns: 1fr 1fr; column-gap: 22px; }
+.cols.w60 { grid-template-columns: 1.45fr 1fr; }
+.cols.w40 { grid-template-columns: 1fr 1.45fr; }
+.cols3 { display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 12px; }
+.cols4 { display: grid; grid-template-columns: repeat(4, 1fr); column-gap: 10px; }
+.cols > *, .cols3 > *, .cols4 > *, .doors > *, .jobs > *, .grid2 > * { min-width: 0; }
+.grid2 { display: grid; column-gap: 22px; align-items: start; }
+
+ul, ol { margin: 0 0 8px; padding-left: 16px; }
+li { margin: 0 0 4px; }
+ul.dots { list-style: none; padding-left: 0; }
+ul.dots > li { position: relative; padding-left: 13px; }
+ul.dots > li::before { content: ""; position: absolute; left: 1px; top: .55em; width: 5px; height: 5px; border-radius: 50%; background: var(--teal); }
+ol.steps { list-style: none; padding-left: 0; counter-reset: s; }
+ol.steps > li { counter-increment: s; position: relative; padding-left: 25px; margin-bottom: 6px; }
+ol.steps > li::before {
+  content: counter(s); position: absolute; left: 0; top: .05em; width: 17px; height: 17px; border-radius: 50%;
+  background: var(--teal); color: #fff; font-size: 7.6pt; font-weight: 700; display: grid; place-items: center; line-height: 1;
+}
+ol.steps.amber > li::before { background: var(--amber-bar); color: #3b2300; }
+ol.steps.red > li::before { background: var(--red); }
+
+code {
+  font-family: Menlo, "SF Mono", Monaco, monospace; font-size: .84em; background: #edf1f4; color: #1d3a4e;
+  border-radius: 3px; padding: .5px 3px; white-space: nowrap;
+}
+pre.code {
+  background: var(--navy); color: #e3ebf3; font-family: Menlo, "SF Mono", Monaco, monospace; font-size: 7.5pt; line-height: 1.52;
+  padding: 9px 12px; border-radius: 7px; margin: 6px 0 10px; white-space: pre; overflow: hidden; tab-size: 4;
+}
+pre.code .c { color: #8ea2b6; }
+pre.code .p { color: #5eead4; }
+pre.code .o { color: #fcd38a; }
+pre.code .r { color: #fca5a5; }
+pre.code .g { color: #86efac; }
+pre.code.light { background: #f3f6f8; color: #1d2d3c; border: 1px solid var(--line); }
+pre.code.light .c { color: #7b8a99; }
+
+.callout { border-radius: 8px; padding: 8px 12px 8px; margin: 8px 0; font-size: 9.4pt; line-height: 1.42; }
+.callout .t { font-weight: 700; display: block; margin-bottom: 2px; font-size: 7.4pt; letter-spacing: .1em; text-transform: uppercase; }
+.callout p:last-child { margin-bottom: 0; }
+.rule { background: var(--teal-soft); border-left: 4px solid var(--teal); }
+.rule .t { color: var(--teal); }
+.trap { background: var(--amber-soft); border-left: 4px solid var(--amber-bar); }
+.trap .t { color: var(--amber); }
+.never { background: var(--red-soft); border-left: 4px solid var(--red); }
+.never .t { color: var(--red); }
+.note { background: var(--bg); border-left: 4px solid #b8c3ce; }
+.note .t { color: var(--muted); }
+
+table.t { width: 100%; border-collapse: collapse; font-size: 8.7pt; margin: 4px 0 10px; line-height: 1.35; }
+table.t th { text-align: left; font-size: 7pt; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border-bottom: 1.5px solid var(--ink2); padding: 4px 6px; font-weight: 700; }
+table.t td { border-bottom: 1px solid var(--line); padding: 4.5px 6px; vertical-align: top; }
+table.t tr:last-child td { border-bottom: none; }
+table.t.tight td { padding: 3.6px 6px; }
+table.t td:first-child { font-weight: 600; }
+
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #fff; }
+.card h4 { margin: 0 0 3px; font-size: 10.2pt; line-height: 1.25; }
+.card p { margin: 0; font-size: 8.8pt; color: var(--ink2); line-height: 1.4; }
+.card.soft { background: var(--bg); border-color: transparent; }
+.card.teal { background: var(--teal-soft); border-color: var(--teal-line); }
+
+.phone { border-radius: 19px; padding: 5px; background: #121a26; box-shadow: 0 5px 16px rgba(15,23,42,.2); }
+.phone img { display: block; width: 100%; border-radius: 14px; }
+.phone.land { border-radius: 16px; }
+.phone.land img { border-radius: 11px; }
+.browser { border-radius: 8px; overflow: hidden; border: 1px solid #d3dae2; box-shadow: 0 5px 16px rgba(15,23,42,.14); background: #fff; }
+.browser .bar { height: 15px; background: #eef1f4; border-bottom: 1px solid #dde3e9; display: flex; align-items: center; gap: 4px; padding-left: 7px; }
+.browser .bar i { width: 6px; height: 6px; border-radius: 50%; background: #cdd5dd; display: block; }
+.browser img { display: block; width: 100%; }
+figure { margin: 0; }
+figcaption { font-size: 7.9pt; color: var(--muted); margin-top: 6px; line-height: 1.35; }
+
+.more { margin-top: auto; padding-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 8pt; color: var(--muted); flex: none; }
+.chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 99px; padding: 2.5px 9px 2.5px 7px; background: #fff; color: var(--ink2); font-size: 7.9pt; }
+.chip b { font-size: 6.8pt; letter-spacing: .1em; text-transform: uppercase; color: var(--teal); }
+.chip code { background: none; padding: 0; font-size: 7.6pt; }
+.pill { display: inline-block; padding: 1px 7px; border-radius: 99px; background: var(--teal-soft); color: var(--teal); font-weight: 700; font-size: 7.6pt; letter-spacing: .02em; }
+.pill.amber { background: var(--amber-soft); color: var(--amber); }
+.pill.red { background: var(--red-soft); color: var(--red); }
+.pill.gray { background: #eef1f4; color: var(--muted); }
+.nb { display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; background: var(--teal); color: #fff; font-size: 7.6pt; font-weight: 700; line-height: 1; flex: none; }
+.nb.amber { background: var(--amber-bar); color: #3b2300; }
+
+svg.dia { display: block; width: 100%; height: auto; }
+svg text { font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+svg .mono { font-family: Menlo, Monaco, monospace; }
+svg .lbl { paint-order: stroke; stroke: #fff; stroke-width: 3.5px; stroke-linejoin: round; }
+
+/* Cover */
+.page.cover { padding: 0; background: var(--navy); color: #fff; }
+.cover .inner { padding: 0.75in 0.75in 0.6in; height: 100%; display: flex; flex-direction: column; position: relative; }
+.cover .brand { display: flex; align-items: center; gap: 10px; font-size: 8.5pt; letter-spacing: .16em; text-transform: uppercase; color: #9fb4c6; font-weight: 600; }
+.cover h1 { font-size: 50pt; line-height: .98; margin: 0.55in 0 14px; letter-spacing: -.025em; font-weight: 700; }
+.cover h1 span { color: #5eead4; }
+.cover .sub { font-size: 14pt; line-height: 1.4; color: #c5d3df; max-width: 5.6in; margin: 0; }
+.cover .stage { position: relative; margin-top: 0.5in; height: 5.0in; }
+.cover .stage .browser { position: absolute; left: 0; top: 0; width: 5.75in; border-color: #2c3a4c; box-shadow: 0 18px 40px rgba(0,0,0,.45); }
+.cover .stage .phone { position: absolute; right: -0.05in; top: 0.8in; width: 1.95in; box-shadow: 0 18px 40px rgba(0,0,0,.55); background: #0b1119; border: 1px solid #334155; }
+.cover .tags { display: flex; gap: 8px; margin-top: auto; }
+.cover .tags span { border: 1px solid #334760; color: #cfe0ee; border-radius: 99px; padding: 4px 12px; font-size: 8.5pt; }
+.cover .fine { margin-top: 14px; font-size: 8pt; color: #8299ad; display: flex; justify-content: space-between; }
+
+/* Contents */
+.toc { list-style: none; margin: 0; padding: 0; }
+.toc li { display: grid; grid-template-columns: 26px 1fr auto; align-items: baseline; gap: 6px; padding: 4.5px 0; border-bottom: 1px solid var(--line); margin: 0; }
+.toc .k { color: var(--teal); font-weight: 700; font-size: 10pt; }
+.toc .tt { font-weight: 600; font-size: 10.2pt; line-height: 1.3; }
+.toc .tt small { display: block; font-weight: 400; color: var(--muted); font-size: 8pt; margin-top: 0; }
+.toc .pg { color: var(--muted); font-size: 9pt; font-weight: 600; }
+dl.gloss { margin: 0; display: grid; grid-template-columns: 1fr 1fr 1fr; column-gap: 16px; row-gap: 6px; font-size: 8.4pt; line-height: 1.34; }
+dl.gloss div { break-inside: avoid; }
+dl.gloss dt { font-weight: 700; display: inline; }
+dl.gloss dd { display: inline; margin: 0; color: var(--ink2); }
+
+/* Jobs grid */
+.jobs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+.jobs .card { padding: 9px 10px; }
+.jobs .card svg { width: 26px; height: 26px; display: block; margin-bottom: 5px; }
+.jobs .card h4 { font-size: 9.4pt; }
+.jobs .card p { font-size: 8.1pt; line-height: 1.36; }
+
+/* Annotated screenshot */
+.anno { position: relative; }
+.anno .dot {
+  position: absolute; width: 19px; height: 19px; margin: -9.5px 0 0 -9.5px; border-radius: 50%;
+  background: var(--amber-bar); color: #2b1a00; font-size: 8pt; font-weight: 700; display: grid; place-items: center;
+  box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); line-height: 1;
+}
+.legendlist { list-style: none; margin: 0; padding: 0; }
+.legendlist li { display: grid; grid-template-columns: 22px 1fr; gap: 6px; margin-bottom: 7px; font-size: 9pt; line-height: 1.38; }
+.legendlist li .nb { background: var(--amber-bar); color: #2b1a00; margin-top: 1px; }
+.legendlist b { display: block; font-size: 9.6pt; }
+
+/* Doors */
+.doors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.door { border-radius: 10px; border: 1px solid var(--line); overflow: hidden; background: #fff; }
+.door .top { padding: 9px 11px 8px; color: #fff; }
+.door .top .url { font-family: Menlo, monospace; font-size: 10pt; font-weight: 700; }
+.door .top .who { font-size: 8.4pt; opacity: .9; margin-top: 2px; }
+.door dl { margin: 0; padding: 8px 11px 10px; font-size: 8.5pt; line-height: 1.38; }
+.door dt { font-size: 6.9pt; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin-top: 5px; }
+.door dt:first-child { margin-top: 0; }
+.door dd { margin: 0; }
+
+/* Hosts */
+.host { border-radius: 10px; border: 1px solid var(--line); padding: 11px 12px; background: #fff; }
+.host .ic { width: 34px; height: 34px; display: block; margin-bottom: 6px; }
+.host h4 { margin: 0 0 6px; font-size: 11pt; }
+.host dl { margin: 0; font-size: 8.5pt; line-height: 1.36; }
+.host dt { font-size: 6.9pt; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin-top: 6px; }
+.host dd { margin: 0; }
+.host.pick { border-color: var(--teal-line); background: var(--teal-soft); }
+
+/* Do / don't columns */
+.yes, .no { border-radius: 10px; padding: 9px 12px; font-size: 8.9pt; }
+.yes { background: var(--green-soft); }
+.no { background: var(--red-soft); }
+.yes h4, .no h4 { margin: 0 0 5px; font-size: 7.4pt; letter-spacing: .1em; text-transform: uppercase; }
+.yes h4 { color: var(--green); }
+.no h4 { color: var(--red); }
+.yes ul, .no ul { list-style: none; padding: 0; margin: 0; }
+.yes li, .no li { padding-left: 16px; position: relative; margin-bottom: 3.5px; line-height: 1.35; }
+.yes li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+.no li::before { content: "✕"; position: absolute; left: 0; color: var(--red); font-weight: 700; }
+
+/* Chat */
+.chat { display: flex; flex-direction: column; gap: 5px; }
+.msg { border-radius: 12px; padding: 6.5px 11px; font-size: 8.7pt; line-height: 1.4; max-width: 92%; }
+.msg .who { font-size: 6.9pt; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; margin-bottom: 2px; }
+.msg.you { background: var(--teal); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+.msg.you .who { color: #b7f0e6; }
+.msg.bot { background: var(--bg); align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid var(--line); }
+.msg.bot .who { color: var(--teal); }
+.msg code { white-space: normal; }
+.msg.you code { background: rgba(255,255,255,.18); color: #fff; }
+.msg pre.code { margin: 5px 0 2px; font-size: 7.2pt; }
+.msg ul { margin: 3px 0 2px; padding-left: 15px; }
+.msg li { margin-bottom: 1.5px; }
+.msg ul.ticks { list-style: none; padding-left: 2px; }
+.tick { color: var(--green); font-weight: 700; }
+.step-tag { font-size: 7pt; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; display: flex; align-items: center; gap: 6px; margin: 4px 0 0; }
+.step-tag::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+/* Prompt anatomy */
+.anat { display: flex; flex-direction: column; gap: 4px; }
+.anat div { display: grid; grid-template-columns: 112px 1fr; align-items: center; border-radius: 6px; overflow: hidden; font-size: 8.5pt; background: var(--bg); }
+.anat div b { background: var(--teal); color: #fff; padding: 5px 9px; font-size: 8.3pt; height: 100%; display: flex; align-items: center; }
+.anat div span { padding: 4px 9px; line-height: 1.3; }
+
+.plist { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; font-size: 8.4pt; }
+.plist div { display: grid; grid-template-columns: 20px 1fr; gap: 4px; padding: 3.5px 0; border-bottom: 1px solid var(--line); line-height: 1.3; }
+.plist div b { color: var(--teal); }
+.plist div.new b { color: var(--amber); }
+
+.flow { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; font-size: 7.8pt; }
+.flow .s { border-radius: 5px; background: var(--teal-soft); border: 1px solid var(--teal-line); padding: 1.5px 5px; font-weight: 700; color: var(--teal); }
+.flow .s.alt { background: var(--amber-soft); border-color: #f3cf8a; color: var(--amber); }
+.flow .a { color: var(--soft); }
+
+.top10 { counter-reset: t; list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; }
+.top10 li { counter-increment: t; position: relative; padding: 6px 0 6px 32px; border-bottom: 1px solid var(--line); margin: 0; font-size: 9pt; line-height: 1.38; }
+.top10 li::before { content: counter(t, decimal-leading-zero); position: absolute; left: 0; top: 5px; font-size: 13pt; font-weight: 700; color: var(--teal); letter-spacing: -.02em; }
+.tree { font-family: Menlo, monospace; font-size: 7.8pt; line-height: 1.6; background: var(--bg); border-radius: 8px; padding: 10px 13px; white-space: pre; margin: 0; color: var(--ink2); }
+.tree b { color: var(--teal); }
+.tree i { color: var(--soft); font-style: normal; }
+</style>
+</head>
+<body>
+
+<!-- Shared SVG markers -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#64748b"/></marker>
+    <marker id="ahT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0f766e"/></marker>
+    <marker id="ahA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#d97706"/></marker>
+    <marker id="ahR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#b91c1c"/></marker>
+    <marker id="ahV" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#4f46e5"/></marker>
+    <filter id="sh" x="-10%" y="-10%" width="130%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#0f172a" flood-opacity=".22"/></filter>
+    <symbol id="appicon" viewBox="0 0 64 64">
+      <rect width="64" height="64" rx="14" fill="#0f766e"/>
+      <path d="M10 46 L22 18 L34 40 L42 28 L54 46 Z" fill="#99f6e4" opacity=".9"/>
+      <path d="M10 46 H54" stroke="#ecfeff" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="44" cy="17" r="6" fill="#fbbf24"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ============================== 1 · COVER ============================== -->
+<section class="page cover">
+  <div class="inner">
+    <div class="brand"><svg width="26" height="26"><use href="#appicon"/></svg> React Maps Playbook</div>
+    <h1>How our<br>maps <span>work</span></h1>
+    <p class="sub">A friendly tour of the map apps we build: how a map page is put together, where it runs, how it stays safe, and how to build your own with an AI coding agent.</p>
+    <div class="stage">
+      <div class="browser"><div class="bar"><i></i><i></i><i></i></div><img src="../img/example-status-grid-1280x800.png" alt="The demo farm map on a laptop"></div>
+      <div class="phone"><img src="../img/example-map-390x844.png" alt="The demo farm map on a phone"></div>
+    </div>
+    <div class="tags"><span>Plain language</span><span>Real lessons</span><span>Copy-paste prompts</span><span>Mobile first</span></div>
+    <div class="fine"><span>Every map, name and number in this guide is invented demo data.</span><span>2026 edition</span></div>
+  </div>
+</section>
+
+<!-- ============================== 2 · CONTENTS ============================== -->
+<section class="page" id="contents">
+  <div class="runhead"><span>How our maps work</span><span>Contents</span></div>
+  <div class="content">
+    <div class="cols w60" style="column-gap:28px">
+      <div>
+        <h2 style="font-size:20pt;margin-bottom:10px">What's inside</h2>
+        <ul class="toc">
+          <li><span class="k">1</span><a class="tt" href="#ch1">What the maps do<small>The jobs, and the bones every map shares</small></a><span class="pg">3</span></li>
+          <li><span class="k">2</span><a class="tt" href="#ch2">How a map app fits together<small>Four parts, one image, and the anatomy of the map page</small></a><span class="pg">4</span></li>
+          <li><span class="k">3</span><a class="tt" href="#ch3">Menus that stay on top<small>The bug we hit most, and the fix that holds</small></a><span class="pg">6</span></li>
+          <li><span class="k">4</span><a class="tt" href="#ch4">Icons<small>Status dots, labels, machine clip art, app icons</small></a><span class="pg">7</span></li>
+          <li><span class="k">5</span><a class="tt" href="#ch5">Share links and signed-in maps<small>Three ways to open one map</small></a><span class="pg">8</span></li>
+          <li><span class="k">6</span><a class="tt" href="#ch6">How data gets onto the map<small>Downloaded files in, GeoJSON out</small></a><span class="pg">9</span></li>
+          <li><span class="k">7</span><a class="tt" href="#ch7">Where to run it<small>Your laptop, your own server, or DigitalOcean</small></a><span class="pg">10</span></li>
+          <li><span class="k">8</span><a class="tt" href="#ch8">Keys and scripts<small>Give the agent scripts, not keys</small></a><span class="pg">12</span></li>
+          <li><span class="k">9</span><a class="tt" href="#ch9">HTTPS with Caddy<small>One front door with automatic certificates</small></a><span class="pg">13</span></li>
+          <li><span class="k">10</span><a class="tt" href="#ch10">Optional login with Authentik<small>Who may sign in, logout, passkeys, failing closed</small></a><span class="pg">14</span></li>
+          <li><span class="k">11</span><a class="tt" href="#ch11">Mobile first<small>Four screen sizes, every time</small></a><span class="pg">16</span></li>
+          <li><span class="k">12</span><a class="tt" href="#ch12">Building it with an AI agent<small>The loop, the sixteen prompts, a worked example</small></a><span class="pg">17</span></li>
+          <li><span class="k">✓</span><a class="tt" href="#last">If you remember nothing else<small>The short list, and where everything lives</small></a><span class="pg">20</span></li>
+        </ul>
+      </div>
+      <div>
+        <div class="card teal" style="margin-top:6px">
+          <h4>How to use this guide</h4>
+          <p style="margin-bottom:6px">This is the picture book. The playbook's <code>docs/</code> folder has the full detail and the code, and <code>prompts/</code> has a copy-paste prompt for each piece.</p>
+          <p>Every chapter ends with two chips: where to read more, and which prompt builds it.</p>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><span class="chip"><b>Read</b><code>docs/03</code></span><span class="chip"><b>Prompt</b><code>04</code></span></div>
+        </div>
+        <h3 style="margin-top:16px">Three things to know first</h3>
+        <ol class="steps">
+          <li><b>Everything in the pictures is invented.</b> The demo app in <code>example/</code> draws made-up fields. The screenshots use a blank, made-up basemap, so no real place appears. The demo takes a few shortcuts our real apps don't (the README lists them). Our real apps use satellite imagery.</li>
+          <li><b>Placeholders stand in for real names:</b> <code>example.com</code>, <code>203.0.113.10</code>, <code>&lt;token&gt;</code>. Put your own in before you run anything, and use the same placeholders in your own public repos.</li>
+          <li><b>You don't have to memorise any of it.</b> The agent reads the docs. Your job is to know what good looks like, and to check.</li>
+        </ol>
+      </div>
+    </div>
+    <h3 style="margin-top:16px">Words you'll see</h3>
+    <dl class="gloss">
+      <div><dt>SPA (single-page app):</dt> <dd>one web page whose JavaScript draws every screen.</dd></div>
+      <div><dt>Leaflet:</dt> <dd>the JavaScript library that draws the map. <b>react-leaflet</b> lets React use it.</dd></div>
+      <div><dt>Tiles, basemap:</dt> <dd>the background imagery, loaded as small square pictures.</dd></div>
+      <div><dt>GeoJSON:</dt> <dd>a text format for shapes (points, lines, polygons), each with a bag of properties.</dd></div>
+      <div><dt>Layer:</dt> <dd>one set of things on the map (fields, machines, labels) that you switch on or off.</dd></div>
+      <div><dt>z-index:</dt> <dd>the CSS number that decides what's drawn on top.</dd></div>
+      <div><dt>Portal:</dt> <dd>React drawing a component somewhere else in the page, usually straight into <code>&lt;body&gt;</code>.</dd></div>
+      <div><dt>Docker image:</dt> <dd>the app packed into one file that runs the same everywhere.</dd></div>
+      <div><dt>GHCR:</dt> <dd>GitHub's container registry, where the images are stored.</dd></div>
+      <div><dt>Portainer:</dt> <dd>a web page for running Docker apps ("stacks") on your own server.</dd></div>
+      <div><dt>Caddy:</dt> <dd>the web server in front of every app. It handles HTTPS and routing.</dd></div>
+      <div><dt>OIDC, IdP:</dt> <dd>the standard behind "Sign in with…", and the server that owns the logins.</dd></div>
+      <div><dt>Authentik:</dt> <dd>the identity provider we run ourselves.</dd></div>
+      <div><dt>Droplet:</dt> <dd>DigitalOcean's name for a rented virtual server.</dd></div>
+      <div><dt>Agent:</dt> <dd>an AI coding assistant that reads, runs and edits code in your repo.</dd></div>
+    </dl>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 3 · CH1 ============================== -->
+<section class="page" id="ch1">
+  <div class="runhead"><span><b>1</b> · What the maps do</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap"><div class="num">1</div><div><h1>What the maps do</h1><p class="lede">We run about a dozen map apps on a working farm. They do different jobs, but they're built from the same handful of ideas.</p></div></header>
+
+    <div class="jobs">
+      <div class="card"><svg viewBox="0 0 26 26"><rect x="2" y="3" width="10" height="9" rx="1.5" fill="#86efac" stroke="#15803d"/><rect x="14" y="3" width="10" height="9" rx="1.5" fill="#fde68a" stroke="#b45309"/><rect x="2" y="14" width="22" height="9" rx="1.5" fill="#fecaca" stroke="#b91c1c"/></svg><h4>Field operations</h4><p>Every field is a shape on satellite imagery, coloured by what was planted, sprayed or harvested, with live machines on top.</p></div>
+      <div class="card"><svg viewBox="0 0 26 26"><path d="M13 3 C9 9 6 12 6 16 a7 7 0 0 0 14 0 C20 12 17 9 13 3z" fill="#bae6fd" stroke="#0369a1"/><circle cx="20" cy="6" r="3" fill="#22c55e" stroke="#fff"/></svg><h4>Irrigation</h4><p>Fields coloured by days since they were last watered, and pressure sensors as dots, updated live.</p></div>
+      <div class="card"><svg viewBox="0 0 26 26"><path d="M3 20 C8 18 10 9 16 10 S22 6 23 4" fill="none" stroke="#0f766e" stroke-width="2" stroke-dasharray="3 2"/><circle cx="3.5" cy="20" r="3" fill="#22c55e" stroke="#fff"/><circle cx="23" cy="4.5" r="3" fill="#f59e0b" stroke="#fff"/></svg><h4>Fleet maps</h4><p>Sprayers, tractors and pickups as status dots, with the day's track and a replay slider.</p></div>
+      <div class="card"><svg viewBox="0 0 26 26"><rect x="2" y="6" width="11" height="8" rx="4" fill="#0ea5e9"/><text x="7.5" y="12.3" font-size="5.5" fill="#fff" text-anchor="middle" font-weight="700">0.8</text><rect x="12" y="14" width="12" height="8" rx="4" fill="#4f46e5"/><text x="18" y="20.3" font-size="5.5" fill="#fff" text-anchor="middle" font-weight="700">1.6</text></svg><h4>Weather</h4><p>Rain gauges and stations as value badges on a colour scale, with a radar overlay.</p></div>
+      <div class="card"><svg viewBox="0 0 26 26"><rect x="2" y="2" width="22" height="22" rx="3" fill="#f1f5f9" stroke="#94a3b8"/><path d="M7 16 L10 8 L17 7 L19 15 L12 19z" fill="#99f6e4" stroke="#0f766e"/></svg><h4>Customer portal</h4><p>Each customer signs in and sees only their own field boundaries.</p></div>
+      <div class="card"><svg viewBox="0 0 26 26"><path d="M11 15 a4 4 0 0 1 0-6 l3-3 a4 4 0 0 1 6 6 l-1.5 1.5" fill="none" stroke="#0f766e" stroke-width="2.2" stroke-linecap="round"/><path d="M15 11 a4 4 0 0 1 0 6 l-3 3 a4 4 0 0 1-6-6 l1.5-1.5" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-linecap="round"/></svg><h4>Share links</h4><p>Someone outside the company opens one map on a phone. No account needed.</p></div>
+      <div class="card"><svg viewBox="0 0 26 26"><circle cx="13" cy="13" r="9" fill="#bfdbfe" opacity=".6"/><circle cx="13" cy="13" r="4" fill="#2563eb" stroke="#fff" stroke-width="2"/></svg><h4>Visitor map</h4><p>A "you are here" dot that keeps working offline, for people walking the farm.</p></div>
+      <div class="card"><svg viewBox="0 0 26 26"><rect x="2" y="4" width="22" height="14" rx="2" fill="#1e293b"/><rect x="4" y="6" width="18" height="10" rx="1" fill="#99f6e4"/><path d="M9 22 H17" stroke="#1e293b" stroke-width="2" stroke-linecap="round"/></svg><h4>TV kiosk</h4><p>The same map on a wall screen, hands off, drifting slowly so it never burns in.</p></div>
+    </div>
+
+    <h2 style="margin-top:18px">Every one of them has the same bones</h2>
+    <div class="cols w40" style="align-items:start">
+      <ul class="dots" style="margin-top:2px">
+        <li><b>A full-screen map.</b> The map is the page. Buttons, legends and panels float on top of it.</li>
+        <li><b>A top bar</b> with a Home button, the map's name and your user menu.</li>
+        <li><b>Layers</b> you switch on and off, and a choice of what colours the shapes.</li>
+        <li><b>Drawers</b> that slide out with a list and the details of what you tapped.</li>
+        <li><b>Popups</b> with the facts about one field or machine.</li>
+        <li><b>A phone first.</b> Most of our maps are used standing in a field.</li>
+      </ul>
+      <figure>
+        <div class="browser"><div class="bar"><i></i><i></i><i></i></div><img src="../img/example-status-grid-1280x800.png" alt=""></div>
+        <figcaption>The demo app in <code>example/</code>: invented fields coloured by harvest status, machines on top, a half-mile grid switched on, and the field list open on the right.</figcaption>
+      </figure>
+    </div>
+
+    <div class="callout note" style="margin-top:12px"><span class="t">The stack in one breath</span>React and TypeScript for the page, Leaflet for the map, a small Express or FastAPI server, PostgreSQL with PostGIS for shapes, static GeoJSON for seasonal data, all packed into a Docker image that GitHub builds. Caddy puts HTTPS in front, and Authentik handles sign-in where it's needed.</div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>README.md</code></span><span class="chip"><b>Read</b><code>docs/01-architecture.md</code></span><span class="chip"><b>Try</b><code>cd example &amp;&amp; npm install &amp;&amp; npm run dev</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 4 · CH2a ============================== -->
+<section class="page" id="ch2">
+  <div class="runhead"><span><b>2</b> · How a map app fits together</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap"><div class="num">2</div><div><h1>How a map app fits together</h1><p class="lede">Four parts, packed into one Docker image, behind one front door.</p></div></header>
+
+    <svg class="dia" viewBox="0 0 720 352" role="img" aria-label="Architecture: browser to Cloudflare to Caddy to the app container, which holds the map page, the API server and GeoJSON files; the app talks to PostgreSQL and polls vendor APIs; Authentik handles sign-in.">
+      <!-- browser -->
+      <g>
+        <rect x="6" y="118" width="122" height="92" rx="10" fill="#fff" stroke="#cbd5e1"/>
+        <rect x="24" y="134" width="44" height="30" rx="3" fill="#e2e8f0" stroke="#64748b"/>
+        <path d="M18 167 H74" stroke="#64748b" stroke-width="3" stroke-linecap="round"/>
+        <rect x="84" y="130" width="22" height="38" rx="4" fill="#e2e8f0" stroke="#64748b"/>
+        <text x="67" y="188" font-size="12" font-weight="700" text-anchor="middle" fill="#16212c">Browser or phone</text>
+        <text x="67" y="202" font-size="9.5" text-anchor="middle" fill="#5a6777">anyone, anywhere</text>
+      </g>
+      <!-- cloudflare -->
+      <g>
+        <rect x="160" y="128" width="116" height="72" rx="10" fill="#fff4dd" stroke="#f59e0b"/>
+        <text x="218" y="155" font-size="12" font-weight="700" text-anchor="middle" fill="#7c3d06">Cloudflare</text>
+        <text x="218" y="170" font-size="9.5" text-anchor="middle" fill="#7c3d06">DNS and CDN</text>
+        <text x="218" y="184" font-size="9" text-anchor="middle" fill="#a16207" font-style="italic">optional</text>
+      </g>
+      <!-- caddy -->
+      <g filter="url(#sh)">
+        <rect x="306" y="116" width="128" height="96" rx="10" fill="#0f766e"/>
+      </g>
+      <text x="370" y="144" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">Caddy</text>
+      <text x="370" y="160" font-size="9.5" text-anchor="middle" fill="#ccfbf1">HTTPS front door</text>
+      <text x="370" y="176" font-size="9.5" text-anchor="middle" fill="#ccfbf1">ports 80 and 443</text>
+      <text x="370" y="196" font-size="8.5" text-anchor="middle" fill="#99f6e4" class="mono">*.example.com</text>
+      <!-- authentik -->
+      <rect x="306" y="8" width="128" height="62" rx="10" fill="#eef0fd" stroke="#818cf8"/>
+      <text x="370" y="33" font-size="12" font-weight="700" text-anchor="middle" fill="#312e81">Authentik</text>
+      <text x="370" y="49" font-size="9.5" text-anchor="middle" fill="#4338ca">one login for every app</text>
+      <text x="370" y="61" font-size="8.5" text-anchor="middle" fill="#6366f1" font-style="italic">chapter 10</text>
+      <line x1="370" y1="114" x2="370" y2="73" stroke="#818cf8" stroke-width="1.6" marker-end="url(#ahV)"/>
+      <!-- arrows in -->
+      <line x1="130" y1="164" x2="157" y2="164" stroke="#64748b" stroke-width="1.6" marker-end="url(#ah)"/>
+      <line x1="278" y1="164" x2="303" y2="164" stroke="#64748b" stroke-width="1.6" marker-end="url(#ah)"/>
+      <line x1="436" y1="164" x2="463" y2="164" stroke="#0f766e" stroke-width="1.8" marker-end="url(#ahT)"/>
+      <!-- app container -->
+      <rect x="466" y="26" width="248" height="236" rx="12" fill="#f8fafc" stroke="#0f766e" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="480" y="46" font-size="9" font-weight="700" fill="#0f766e" letter-spacing="1.2">APP CONTAINER · ONE DOCKER IMAGE</text>
+      <g>
+        <rect x="482" y="58" width="216" height="54" rx="8" fill="#fff" stroke="#cbd5e1"/>
+        <text x="495" y="78" font-size="10" font-weight="700" fill="#0f766e">1</text>
+        <text x="508" y="78" font-size="11.5" font-weight="700" fill="#16212c">The map page</text>
+        <text x="508" y="94" font-size="9.5" fill="#5a6777">React + Leaflet, built into plain files</text>
+      </g>
+      <g>
+        <rect x="482" y="120" width="216" height="54" rx="8" fill="#fff" stroke="#cbd5e1"/>
+        <text x="495" y="140" font-size="10" font-weight="700" fill="#0f766e">2</text>
+        <text x="508" y="140" font-size="11.5" font-weight="700" fill="#16212c">The API server</text>
+        <text x="508" y="156" font-size="9.5" fill="#5a6777">Express or FastAPI, answers with JSON</text>
+      </g>
+      <g>
+        <rect x="482" y="182" width="216" height="54" rx="8" fill="#fff" stroke="#cbd5e1"/>
+        <text x="495" y="202" font-size="10" font-weight="700" fill="#0f766e">4</text>
+        <text x="508" y="202" font-size="11.5" font-weight="700" fill="#16212c">GeoJSON files</text>
+        <text x="508" y="218" font-size="9.5" fill="#5a6777">this season's map data, baked in</text>
+      </g>
+      <!-- database -->
+      <g>
+        <path d="M520 296 v36 a70 10 0 0 0 140 0 v-36" fill="#e5f4f1" stroke="#0f766e"/>
+        <ellipse cx="590" cy="296" rx="70" ry="10" fill="#f0faf8" stroke="#0f766e"/>
+        <text x="535" y="320" font-size="10" font-weight="700" fill="#0f766e">3</text>
+        <text x="548" y="320" font-size="11" font-weight="700" fill="#16212c">PostgreSQL</text>
+        <text x="548" y="334" font-size="9" fill="#5a6777">+ PostGIS · its own</text>
+      </g>
+      <line x1="590" y1="264" x2="590" y2="283" stroke="#0f766e" stroke-width="1.6" marker-end="url(#ahT)"/>
+      <!-- vendor -->
+      <rect x="306" y="266" width="128" height="76" rx="10" fill="#fff" stroke="#94a3b8" stroke-dasharray="4 3"/>
+      <text x="370" y="288" font-size="11.5" font-weight="700" text-anchor="middle" fill="#334155">Vendor APIs</text>
+      <text x="370" y="303" font-size="9.5" text-anchor="middle" fill="#5a6777">machines, sensors</text>
+      <path d="M482 158 C 452 170, 452 270, 437 290" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+      <text x="370" y="320" font-size="8.5" text-anchor="middle" fill="#5a6777" font-style="italic">polled by the server</text>
+      <text x="370" y="332" font-size="8.5" text-anchor="middle" fill="#5a6777" font-style="italic">every few minutes</text>
+      <!-- note -->
+      <text x="10" y="252" font-size="9.5" fill="#5a6777">The browser never calls a vendor.</text>
+      <text x="10" y="266" font-size="9.5" fill="#5a6777">It only reads what the server stored.</text>
+    </svg>
+
+    <div class="cols" style="margin-top:10px">
+      <div>
+        <ol class="steps">
+          <li><b>The map page.</b> One web page whose JavaScript draws every screen. Leaflet draws the map, and React draws everything around it.</li>
+          <li><b>The API server.</b> Reads the database and answers with JSON. Each route is a short function, with the SQL right there to read.</li>
+        </ol>
+      </div>
+      <div>
+        <ol class="steps" start="3" style="counter-reset:s 2">
+          <li><b>The database.</b> PostgreSQL, with PostGIS when there are field shapes ("which field is this point in?", "how many acres?").</li>
+          <li><b>Static GeoJSON files.</b> Map data that changes by season, not by minute. Small tools build it, and it ships inside the image (chapter 6).</li>
+        </ol>
+      </div>
+    </div>
+
+    <h2>Each app is its own small stack</h2>
+    <div class="cols">
+      <ul class="dots">
+        <li><b>Its own repo, its own database.</b> If app B needs app A's data, app A gets a small API. Two apps never share one database.</li>
+        <li><b>Two shared services only:</b> one front door (Caddy, chapter 9) and one login (Authentik, chapter 10).</li>
+      </ul>
+      <ul class="dots">
+        <li><b>Every app answers <code>/health</code> and <code>/api/about</code></b> without sign-in, so you can always see what's running and which version.</li>
+        <li><b>A nightly sync is a second container</b> from the same image, not a cron job hidden on the server.</li>
+      </ul>
+    </div>
+
+    <h2>One image, or two</h2>
+    <div class="cols">
+      <div class="card teal"><h4>Shape A: one image <span class="pill" style="margin-left:4px">start here</span></h4><p>The Node server answers the API <b>and</b> hands out the built map page. One container, one port. Our field-operations map is built this way.</p></div>
+      <div class="card"><h4>Shape B: split images</h4><p>nginx hands out the map page and passes <code>/api</code> to a separate backend, such as a Python one. Use it when the backend isn't Node, or ships on a different schedule.</p></div>
+    </div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>docs/01-architecture.md</code></span><span class="chip"><b>Prompt</b><code>01-start-a-new-map-app</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 5 · CH2b ============================== -->
+<section class="page">
+  <div class="runhead"><span><b>2</b> · How a map app fits together</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap cont"><div class="num">2</div><div><h1>Anatomy of the map page</h1><p class="lede">The screen people actually use, from the outside in.</p></div></header>
+
+    <div style="display:grid;grid-template-columns:2.55in 1fr;column-gap:26px;align-items:start">
+      <figure>
+        <div class="phone anno">
+          <img src="../img/example-map-390x844.png" alt="The demo map on a phone, with numbered callouts">
+          <span class="dot" style="left:12%;top:1.7%">1</span>
+          <span class="dot" style="left:54%;top:3.1%">2</span>
+          <span class="dot" style="left:82%;top:2.4%">3</span>
+          <span class="dot" style="left:32%;top:8.4%">4</span>
+          <span class="dot" style="left:68.5%;top:8.4%">5</span>
+          <span class="dot" style="left:79%;top:14.6%">6</span>
+          <span class="dot" style="left:67.5%;top:56.5%">7</span>
+          <span class="dot" style="left:33%;top:46.8%">8</span>
+          <span class="dot" style="left:28%;top:89%">9</span>
+          <span class="dot" style="left:70%;top:96.5%">10</span>
+        </div>
+        <figcaption>The demo on a 390 × 844 phone.</figcaption>
+      </figure>
+      <ol class="legendlist">
+        <li><span class="nb">1</span><div><b>Home button</b>The app icon. An installed phone app has no Back button, so there's always a visible way home.</div></li>
+        <li><span class="nb">2</span><div><b>Title</b>The map's name, cut short with "…" so the bar never wraps to three lines.</div></li>
+        <li><span class="nb">3</span><div><b>User menu</b>Your initials and role. It opens on top of everything (chapter 3).</div></li>
+        <li><span class="nb">4</span><div><b>Layers</b>Opens the left drawer: switch layers on and off, and pick what colours the fields.</div></li>
+        <li><span class="nb">5</span><div><b>Fields</b>Opens the list sheet: a bottom sheet on a phone (10), a side panel on a laptop. Drawers like Layers slide out the same at every size.</div></li>
+        <li><span class="nb">6</span><div><b>Totals chip</b>The one number people want: 232 of 570 acres harvested.</div></li>
+        <li><span class="nb">7</span><div><b>Shapes and labels</b>One component per layer. Labels are placed so they never overlap and never block a tap.</div></li>
+        <li><span class="nb">8</span><div><b>Machines</b>Last known positions from the equipment feed, drawn as small clip art (chapter 4).</div></li>
+        <li><span class="nb">9</span><div><b>Legend</b>Folds away on small screens.</div></li>
+        <li><span class="nb">10</span><div><b>List sheet</b>Pull it up for the list, grouped by status, with acres per group.</div></li>
+      </ol>
+    </div>
+
+    <h2 style="margin-top:14px">The rules that keep it solid</h2>
+    <div class="cols">
+      <ul class="dots">
+        <li><b>Buttons sit beside the map, not inside it.</b> Anything inside Leaflet's box gets Leaflet's drag and click handling, and stops behaving like a button.</li>
+        <li><b>Layers live in the address:</b> <code>/map?layers=fields,equipment</code>. Back, refresh and a shared link all reopen the same view.</li>
+        <li><b>The map stays loaded when you go Home.</b> Home is drawn over it, so you come back to the same spot and zoom.</li>
+      </ul>
+      <ul class="dots">
+        <li><b>Leaflet measures its box once.</b> Tell it when the box changes size (a rotated phone, a drawer opening), or tiles end up off the grid.</li>
+        <li><b>No blank screens.</b> A crash shows "Something went wrong / Reload" instead of a white page you can't escape.</li>
+        <li><b>Every string that becomes map HTML is escaped</b> with <code>esc()</code> first (chapter 4).</li>
+      </ul>
+    </div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>docs/02-the-map-page.md</code></span><span class="chip"><b>Prompt</b><code>02-add-a-layer</code></span><span class="chip"><b>Prompt</b><code>03-slide-out-panel</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 6 · CH3 ============================== -->
+<section class="page" id="ch3">
+  <div class="runhead"><span><b>3</b> · Menus that stay on top</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap"><div class="num">3</div><div><h1>Menus that stay on top</h1><p class="lede">The bug we hit most often: the account menu opened behind the map. Three separate apps shipped it, and "just raise the z-index" never stuck.</p></div></header>
+
+    <svg class="dia" viewBox="0 0 720 240" role="img" aria-label="Before: the menu is inside the header's sealed box and the map covers it. After: the menu is portaled to the page body and sits above everything.">
+      <!-- BEFORE -->
+      <text x="0" y="13" font-size="10.5" font-weight="700" fill="#b91c1c" letter-spacing="1.2">BEFORE · MENU INSIDE THE HEADER</text>
+      <rect x="0" y="22" width="344" height="214" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
+      <!-- the sliver of menu that is still inside the header -->
+      <rect x="178" y="58" width="150" height="10" fill="#fff"/>
+      <!-- map, drawn over the rest of the menu -->
+      <rect x="12" y="68" width="320" height="156" rx="0" fill="#dbe8d4"/>
+      <rect x="34" y="96" width="70" height="52" fill="#86efac" stroke="#334155"/>
+      <rect x="118" y="90" width="52" height="80" fill="#fde68a" stroke="#334155"/>
+      <circle cx="92" cy="190" r="20" fill="#fca5a5" stroke="#334155"/>
+      <!-- ghost outline: where the menu should be -->
+      <rect x="178" y="58" width="150" height="116" rx="8" fill="none" stroke="#b91c1c" stroke-width="1.6" stroke-dasharray="5 4"/>
+      <text x="190" y="92" font-size="10.5" font-weight="700" fill="#991b1b" class="lbl">The menu, z 9999,</text>
+      <text x="190" y="107" font-size="10.5" font-weight="700" fill="#991b1b" class="lbl">is under here.</text>
+      <text x="190" y="128" font-size="9.5" fill="#991b1b" class="lbl">9999 only counts inside</text>
+      <text x="190" y="141" font-size="9.5" fill="#991b1b" class="lbl">the header's sealed box,</text>
+      <text x="190" y="154" font-size="9.5" fill="#991b1b" class="lbl">and the map (400) beats it.</text>
+      <text x="22" y="216" font-size="10" font-weight="700" fill="#334155" class="lbl">The map · z 400</text>
+      <!-- header -->
+      <rect x="12" y="34" width="320" height="34" rx="5" fill="#1f2b3c"/>
+      <rect x="12" y="34" width="320" height="34" rx="5" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 3"/>
+      <text x="22" y="56" font-size="10.5" fill="#fff" font-weight="700">Header with a blur: a sealed box</text>
+      <circle cx="312" cy="51" r="10" fill="#0f766e"/><text x="312" y="54.5" font-size="8" fill="#fff" text-anchor="middle" font-weight="700">DU</text>
+
+      <!-- arrow between -->
+      <path d="M350 129 H 370" stroke="#0f766e" stroke-width="2.2" marker-end="url(#ahT)"/>
+
+      <!-- AFTER -->
+      <text x="376" y="13" font-size="10.5" font-weight="700" fill="#0f766e" letter-spacing="1.2">AFTER · MENU PORTALED TO &lt;BODY&gt;</text>
+      <rect x="376" y="22" width="344" height="214" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
+      <rect x="388" y="68" width="320" height="156" fill="#dbe8d4"/>
+      <rect x="410" y="96" width="70" height="52" fill="#86efac" stroke="#334155"/>
+      <rect x="494" y="90" width="52" height="80" fill="#fde68a" stroke="#334155"/>
+      <circle cx="468" cy="190" r="20" fill="#fca5a5" stroke="#334155"/>
+      <rect x="388" y="34" width="320" height="34" rx="5" fill="#1f2b3c"/>
+      <text x="398" y="56" font-size="10.5" fill="#fff" font-weight="700">Header</text>
+      <circle cx="688" cy="51" r="10" fill="#0f766e"/><text x="688" y="54.5" font-size="8" fill="#fff" text-anchor="middle" font-weight="700">DU</text>
+      <!-- backdrop -->
+      <rect x="388" y="34" width="320" height="190" fill="#0f172a" opacity=".08"/>
+      <text x="398" y="216" font-size="9.5" fill="#334155" class="lbl">invisible click-catcher over everything · z 9998</text>
+      <!-- menu on top -->
+      <g filter="url(#sh)"><rect x="554" y="58" width="150" height="128" rx="8" fill="#fff" stroke="#0f766e" stroke-width="1.5"/></g>
+      <text x="566" y="78" font-size="10.5" font-weight="700" fill="#0f766e">Menu · z 9999</text>
+      <text x="566" y="98" font-size="10" fill="#334155">About this demo</text>
+      <text x="566" y="115" font-size="10" fill="#334155">Clear cache &amp; reload</text>
+      <text x="566" y="132" font-size="10" fill="#b91c1c">Sign out</text>
+      <text x="566" y="157" font-size="9" fill="#0f766e" font-weight="700">a direct child of &lt;body&gt;,</text>
+      <text x="566" y="170" font-size="9" fill="#0f766e" font-weight="700">so nothing can trap it</text>
+    </svg>
+
+    <div class="cols w60" style="margin-top:12px">
+      <div>
+        <h3>Why it happens</h3>
+        <p>Leaflet gives its own pieces z-index numbers: tiles 200, shapes 400, markers 600, popups 700, its buttons 1000. A typical "z-50" menu loses to all of them.</p>
+        <p>Raising the number doesn't stick, because of <b>stacking contexts</b>. A box with a blur, a transform, a sticky or fixed position, or see-through opacity becomes a sealed layer. Anything inside it, even at z-index 9999, can only rise as high as the box itself. A frosted-glass header is exactly that kind of box.</p>
+        <div class="callout rule"><span class="t">The rule</span>Every dropdown, menu and popover in the app's header is drawn with <code>createPortal(…, document.body)</code>, at <code>position: fixed</code>, with an invisible click-catcher at z 9998 and the menu at z 9999. <b>Even a "quick, simple" menu keeps this shell.</b> Two later apps tried a small local dropdown "just for now", and both shipped invisible.</div>
+        <h3>Write the ladder down</h3>
+        <table class="t">
+          <tr><th style="width:26%">z-index</th><th>What lives there</th></tr>
+          <tr><td>200 – 700</td><td>Leaflet: tiles, shapes, markers, tooltips, popups</td></tr>
+          <tr><td>1000</td><td>Leaflet's buttons, the app's top bar, floating buttons</td></tr>
+          <tr><td>1100 – 1900</td><td>Drawers and their backdrops (1500: Home drawn over the map)</td></tr>
+          <tr><td>2000 – 3000</td><td>Dialogs, the crash screen, print preview</td></tr>
+          <tr><td>9998 / 9999</td><td>Click-catcher and menu, <b>always portaled</b></td></tr>
+        </table>
+      </div>
+      <div>
+        <figure>
+          <div class="phone" style="width:1.66in;margin:2px auto 0"><img src="../img/example-user-menu-390x844.png" alt="The user menu open over the map"></div>
+          <figcaption style="text-align:center">The demo's user menu, open over the map, the drawer button and the totals chip.</figcaption>
+        </figure>
+        <h3 style="margin-top:12px">Done means</h3>
+        <ul class="dots small">
+          <li>It opens on top with a drawer open and a popup open.</li>
+          <li>Tapping outside closes it, and that tap does <b>not</b> also select the marker underneath.</li>
+          <li>Escape closes it. At 320 px wide it fits, with 44 px rows.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>docs/03-menus-on-top.md</code></span><span class="chip"><b>Prompt</b><code>04-user-menu-on-top</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 7 · CH4 ============================== -->
+<section class="page" id="ch4">
+  <div class="runhead"><span><b>4</b> · Icons</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap"><div class="num">4</div><div><h1>Icons</h1><p class="lede">None of our apps uses Leaflet's default blue pin. Four kinds of icon do all the work, and all of them are drawn in code.</p></div></header>
+
+    <div class="card soft" style="padding:12px 16px 9px;margin-bottom:12px">
+      <svg class="dia" viewBox="0 0 690 128" style="max-width:6.1in;margin:0 auto" role="img" aria-label="Four machine icons drawn in SVG: tractor, sprayer, combine, pickup">
+        <!-- tractor -->
+        <g transform="translate(22,0) scale(1.85)">
+          <rect x="7" y="24" width="22" height="10" rx="2" fill="#0e7490"/><rect x="18" y="13" width="2.5" height="11" fill="#164e63"/><rect x="27" y="19" width="17" height="15" rx="2" fill="#0e7490"/>
+          <rect x="28" y="4" width="17" height="3" rx="1" fill="#164e63"/><rect x="30" y="7" width="13" height="13" rx="2" fill="#bae6fd" stroke="#164e63" stroke-width="2"/>
+          <circle cx="15" cy="37" r="7" fill="#1f2937"/><circle cx="15" cy="37" r="2.9" fill="#cbd5e1"/><circle cx="39" cy="34" r="11" fill="#1f2937"/><circle cx="39" cy="34" r="4.6" fill="#cbd5e1"/>
+        </g>
+        <!-- sprayer -->
+        <g transform="translate(197,0) scale(1.85)">
+          <rect x="6" y="25" width="50" height="4" rx="1" fill="#164e63"/><rect x="25" y="12" width="26" height="13" rx="6" fill="#0e7490"/><rect x="54" y="6" width="3" height="22" rx="1" fill="#f59e0b"/>
+          <rect x="6" y="8" width="17" height="3" rx="1" fill="#164e63"/><rect x="8" y="11" width="13" height="13" rx="2" fill="#bae6fd" stroke="#164e63" stroke-width="2"/>
+          <rect x="12" y="28" width="4" height="6" fill="#164e63"/><rect x="45" y="28" width="4" height="6" fill="#164e63"/>
+          <circle cx="14" cy="39" r="6.5" fill="#1f2937"/><circle cx="14" cy="39" r="2.7" fill="#cbd5e1"/><circle cx="47" cy="39" r="6.5" fill="#1f2937"/><circle cx="47" cy="39" r="2.7" fill="#cbd5e1"/>
+        </g>
+        <!-- combine -->
+        <g transform="translate(372,0) scale(1.85)">
+          <rect x="1" y="30" width="15" height="8" rx="1" fill="#f59e0b"/><circle cx="8" cy="28" r="5" fill="none" stroke="#164e63" stroke-width="2"/>
+          <rect x="14" y="13" width="42" height="22" rx="3" fill="#0e7490"/><rect x="31" y="8" width="21" height="6" rx="1" fill="#164e63"/>
+          <path d="M50 10 L62 3" stroke="#164e63" stroke-width="3" stroke-linecap="round"/>
+          <rect x="13" y="1" width="17" height="3" rx="1" fill="#164e63"/><rect x="15" y="4" width="13" height="11" rx="2" fill="#bae6fd" stroke="#164e63" stroke-width="2"/>
+          <circle cx="25" cy="37" r="9" fill="#1f2937"/><circle cx="25" cy="37" r="3.8" fill="#cbd5e1"/><circle cx="49" cy="39" r="6" fill="#1f2937"/><circle cx="49" cy="39" r="2.5" fill="#cbd5e1"/>
+        </g>
+        <!-- truck -->
+        <g transform="translate(547,4) scale(1.85)">
+          <path d="M13 24 L19 12 H34 V24 Z" fill="#0e7490"/><path d="M17.5 22 L21.5 15 H31 V22 Z" fill="#bae6fd"/>
+          <rect x="4" y="23" width="56" height="11" rx="3" fill="#0e7490"/><rect x="36" y="20" width="24" height="4" rx="1" fill="#164e63"/>
+          <circle cx="16" cy="36" r="6" fill="#1f2937"/><circle cx="16" cy="36" r="2.5" fill="#cbd5e1"/><circle cx="48" cy="36" r="6" fill="#1f2937"/><circle cx="48" cy="36" r="2.5" fill="#cbd5e1"/>
+        </g>
+        <g font-size="11" font-weight="700" fill="#334155" text-anchor="middle">
+          <text x="81" y="120">Tractor</text><text x="256" y="120">Sprayer</text><text x="431" y="120">Combine</text><text x="606" y="120">Pickup</text>
+        </g>
+      </svg>
+      <p class="xs muted" style="margin:6px 0 0;text-align:center">The demo's machine clip art, straight from <code>example/src/map/equipmentIcons.ts</code>: one function per kind inside a 64 × 48 box, one palette, every machine facing left. Draw your own; never copy a manufacturer's artwork.</p>
+    </div>
+
+    <div class="cols4">
+      <div class="card">
+        <svg viewBox="0 0 140 44" style="width:100%;height:auto;display:block;margin-bottom:6px">
+          <rect width="140" height="44" rx="6" fill="#e9efe3"/>
+          <circle cx="22" cy="22" r="8" fill="#22c55e" stroke="#fff" stroke-width="2.5"/>
+          <circle cx="54" cy="22" r="8" fill="#f59e0b" stroke="#fff" stroke-width="2.5"/>
+          <circle cx="86" cy="22" r="8" fill="#64748b" stroke="#fff" stroke-width="2.5"/>
+          <circle cx="118" cy="22" r="15" fill="#22c55e" fill-opacity=".1" stroke="#22c55e" stroke-dasharray="3 2"/>
+          <circle cx="118" cy="22" r="7" fill="#22c55e" fill-opacity=".6" stroke="#fff" stroke-width="2" stroke-dasharray="3 2"/>
+        </svg>
+        <h4>Status dots</h4>
+        <p>Colour carries the meaning: moving, parked, offline. "Offline" is worked out from the last-seen time, and a rough position is dashed.</p>
+      </div>
+      <div class="card">
+        <svg viewBox="0 0 140 44" style="width:100%;height:auto;display:block;margin-bottom:6px">
+          <rect width="140" height="44" rx="6" fill="#d9e4d0"/>
+          <rect x="10" y="11" width="50" height="22" rx="8" fill="#4f46e5" stroke="#fff" stroke-width="2"/>
+          <text x="35" y="26" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">1.2 in</text>
+          <text x="100" y="27" font-size="12" font-weight="700" fill="#fff" text-anchor="middle" stroke="#111827" stroke-width="2.2" stroke-linejoin="round" paint-order="stroke">Field B</text>
+        </svg>
+        <h4>Badges and labels</h4>
+        <p>Your own HTML on the map. White text gets a dark halo so it reads on any imagery. Labels never catch taps.</p>
+      </div>
+      <div class="card">
+        <svg viewBox="0 0 140 44" style="width:100%;height:auto;display:block;margin-bottom:6px">
+          <rect width="140" height="44" rx="6" fill="#f1f5f9"/>
+          <g fill="none" stroke="#0f766e" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">
+            <path d="M14 18 L26 12 L38 18 L26 24 Z"/><path d="M14 23 L26 29 L38 23"/><path d="M14 28 L26 34 L38 28"/>
+            <path d="M58 32 V14 L68 11 L78 14 L88 11 V29 L78 32 L68 29 Z"/><path d="M68 11 V29 M78 14 V32"/>
+            <path d="M108 12 a8 8 0 0 1 8 8 c0 6 -8 13 -8 13 s-8 -7 -8 -13 a8 8 0 0 1 8 -8 z"/><circle cx="108" cy="20" r="2.5"/>
+          </g>
+        </svg>
+        <h4>Tile icons</h4>
+        <p>Simple 24 × 24 line drawings for the tiles on the Home page, one per map.</p>
+      </div>
+      <div class="card">
+        <svg viewBox="0 0 140 44" style="width:100%;height:auto;display:block;margin-bottom:6px">
+          <rect width="140" height="44" rx="6" fill="#f1f5f9"/>
+          <use href="#appicon" x="10" y="4" width="36" height="36"/>
+          <use href="#appicon" x="58" y="12" width="20" height="20"/>
+          <use href="#appicon" x="90" y="16" width="12" height="12"/>
+          <use href="#appicon" x="114" y="18" width="8" height="8"/>
+        </svg>
+        <h4>App icon set</h4>
+        <p>One piece of artwork, generated by a script into every size: home screen, favicon, browser tab.</p>
+      </div>
+    </div>
+
+    <div class="grid2" style="grid-template-columns:1fr 1.75in;margin-top:14px">
+      <div>
+        <h3>Which picture? One rule list, most specific first</h3>
+        <p>Equipment feeds report a model and a category, and the category is often too general. A self-propelled sprayer that calls itself a "Tractor" has to be matched on its model <b>before</b> the tractor rule catches it. Keep that rule list in one place, so the markers and the legend always agree.</p>
+        <div class="callout never"><span class="t">Never skip this</span><b>Escape every string that goes into map HTML.</b> Labels, badges and string popups are set as raw HTML. A field name typed as <code>&lt;img src=x onerror=…&gt;</code> would run as code in every visitor's browser. <code>esc()</code> turns <code>&lt; &gt; &amp; " '</code> into harmless text. Ask for it from day one.</div>
+        <pre class="code light">export const esc = (t: unknown) =&gt;
+  String(t ?? '').replace(/[&amp;&lt;&gt;"']/g, c =&gt; ({ '&amp;': '&amp;amp;',
+    '&lt;': '&amp;lt;', '&gt;': '&amp;gt;', '"': '&amp;quot;', "'": '&amp;#39;' }[c]!));</pre>
+      </div>
+      <figure>
+        <div class="phone" style="width:1.5in;margin:0 auto"><img src="../img/example-equipment-popup-390x844.png" alt="A machine's popup on a phone"></div>
+        <figcaption style="text-align:center">Tap a machine: its name, type, "last seen 1m ago" and position. The art needs no text label.</figcaption>
+      </figure>
+    </div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>docs/04-icons.md</code></span><span class="chip"><b>Prompt</b><code>05-custom-icons</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 8 · CH5 ============================== -->
+<section class="page" id="ch5">
+  <div class="runhead"><span><b>5</b> · Share links and signed-in maps</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap"><div class="num">5</div><div><h1>Share links and signed-in maps</h1><p class="lede">Some maps get texted to a contractor or a neighbour with no account. Others are for staff only. So one map can be opened three ways.</p></div></header>
+
+    <div class="doors">
+      <div class="door">
+        <div class="top" style="background:#1f2b3c"><div class="url">/map?layers=…</div><div class="who">Signed-in staff · everyday work</div></div>
+        <dl><dt>Page</dt><dd>The full app: every layer, drawer and list.</dd><dt>What lets you in</dt><dd>Your sign-in, checked on every request.</dd></dl>
+      </div>
+      <div class="door">
+        <div class="top" style="background:#4f46e5"><div class="url">/m/&lt;id&gt;</div><div class="who">Signed-in staff · special maps</div></div>
+        <dl><dt>Page</dt><dd>The small, fast viewer: an irrigation plan, soil tests, rates with totals.</dd><dt>What lets you in</dt><dd>A short-lived cookie only the map-data API can read.</dd></dl>
+      </div>
+      <div class="door">
+        <div class="top" style="background:#0f766e"><div class="url">/s/&lt;token&gt;</div><div class="who">Anyone with the link · outsiders</div></div>
+        <dl><dt>Page</dt><dd>The same small viewer. No account, no app data.</dd><dt>What lets you in</dt><dd>The link itself. The random token is the only lock.</dd></dl>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 2.95in;column-gap:24px;margin-top:14px;align-items:start">
+      <div>
+        <h3>How a share link works</h3>
+        <ul class="dots">
+          <li><b>The link is <code>/s/</code> plus a random token,</b> such as <code>pipe-plan-x7k2m9q4ab</code>. Ten random characters are plenty to stop guessing. Because the token is the lock, <b>a real one never goes in a public repo.</b></li>
+          <li><b>The token points at one static GeoJSON file.</b> Public routes never touch the database, and no file path ever comes from the visitor.</li>
+          <li><b>The viewer page is tiny:</b> plain TypeScript and Leaflet, no React, no access to the main app. It loads on one bar of signal, and tells search engines to stay away (<code>noindex</code>).</li>
+          <li><b>Several versions behind one link:</b> "Final | Plan 1 | Plan 2" buttons switch with <code>?design=</code>.</li>
+        </ul>
+        <table class="t">
+          <tr><th>You want to</th><th>Do this</th></tr>
+          <tr><td>Update a shared map</td><td>Rebuild its file and redeploy. Same link, new content.</td></tr>
+          <tr><td>Revoke a link</td><td>Delete its entry and redeploy. The link now says it isn't valid.</td></tr>
+          <tr><td>Replace a leaked link</td><td>Add a new token, delete the old one, send the new link.</td></tr>
+        </table>
+        <div class="callout note"><span class="t">Public link, private extras</span>A public link can show the same map staff see, minus the private layers. Signed-in viewers get an extra file appended; a public token never does.</div>
+      </div>
+      <div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <figure><div class="phone"><img src="../img/example-share-390x844.png" alt="The share viewer showing a demo pipe plan"></div><figcaption>The demo's share link. The demo draws it with React; a real viewer page has none.</figcaption></figure>
+          <figure><div class="phone"><img src="../img/example-share-invalid-390x844.png" alt="The share viewer's invalid link screen"></div><figcaption>A revoked or mistyped link gets plain words.</figcaption></figure>
+        </div>
+        <div class="callout rule" style="margin-top:12px"><span class="t">Errors in plain words</span>No signal: "Check your signal." Not signed in: off to sign in, then straight back. Wrong or old link: "This link isn't valid or has expired." The top bar draws first, so even a failed load has a title.</div>
+      </div>
+    </div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>docs/05-share-links-and-internal-maps.md</code></span><span class="chip"><b>Prompt</b><code>06-public-share-link</code></span><span class="chip"><b>Prompt</b><code>07-signed-in-only-data</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 9 · CH6 ============================== -->
+<section class="page" id="ch6">
+  <div class="runhead"><span><b>6</b> · How data gets onto the map</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap"><div class="num">6</div><div><h1>How data gets onto the map</h1><p class="lede">A lot of what our maps show doesn't come from a live feed. It comes from files somebody downloaded. Small Python tools turn them into GeoJSON that ships with the app.</p></div></header>
+
+    <svg class="dia" viewBox="0 0 720 216" role="img" aria-label="Pipeline: downloaded files go into inbox, a build tool reads them with overrides, self-checks either stop the build or write GeoJSON, which is committed and baked into the image by CI.">
+      <g font-size="9.5" fill="#5a6777" text-anchor="middle">
+        <!-- 1 -->
+        <rect x="0" y="62" width="104" height="80" rx="9" fill="#fff" stroke="#cbd5e1"/>
+        <text x="52" y="84" font-size="11" font-weight="700" fill="#16212c">Downloads</text>
+        <text x="52" y="100">email attachments,</text><text x="52" y="113">vendor portals,</text><text x="52" y="126">controller exports</text>
+        <!-- 2 -->
+        <rect x="124" y="62" width="104" height="80" rx="9" fill="#fff" stroke="#cbd5e1"/>
+        <text x="176" y="84" font-size="11" font-weight="700" fill="#16212c" class="mono">inbox/</text>
+        <text x="176" y="100">the untouched</text><text x="176" y="113">originals</text><text x="176" y="128" fill="#b91c1c" font-weight="700">never committed</text>
+        <!-- 3 -->
+        <rect x="248" y="62" width="112" height="80" rx="9" fill="#e5f4f1" stroke="#0f766e"/>
+        <text x="304" y="84" font-size="11" font-weight="700" fill="#0f766e">Build tool</text>
+        <text x="304" y="100" class="mono" font-size="8.5" fill="#0f766e">build_x.py</text><text x="304" y="114">run with</text><text x="304" y="127" class="mono" font-size="8.5">python3 -I</text>
+        <!-- overrides -->
+        <rect x="256" y="6" width="96" height="36" rx="7" fill="#fff" stroke="#cbd5e1" stroke-dasharray="4 3"/>
+        <text x="304" y="21" font-size="9" fill="#16212c" font-weight="700" class="mono">overrides.json</text>
+        <text x="304" y="34" font-size="8.5">hand corrections</text>
+        <line x1="304" y1="43" x2="304" y2="59" stroke="#64748b" stroke-width="1.4" marker-end="url(#ah)"/>
+        <!-- 4 diamond -->
+        <path d="M434 102 L476 62 L518 102 L476 142 Z" fill="#fff4dd" stroke="#f59e0b"/>
+        <text x="476" y="99" font-size="10" font-weight="700" fill="#7c3d06">Checks</text><text x="476" y="112" font-size="10" font-weight="700" fill="#7c3d06">pass?</text>
+        <!-- fail branch -->
+        <line x1="476" y1="144" x2="476" y2="168" stroke="#b91c1c" stroke-width="1.5" marker-end="url(#ahR)"/>
+        <text x="486" y="160" font-size="8.5" fill="#b91c1c" text-anchor="start" font-weight="700">no</text>
+        <rect x="414" y="170" width="124" height="40" rx="8" fill="#fdeded" stroke="#b91c1c"/>
+        <text x="476" y="187" font-size="9.5" font-weight="700" fill="#991b1b">Stop. Nothing written.</text>
+        <text x="476" y="201" font-size="8.5" fill="#991b1b">exit code 1, deploy blocked</text>
+        <!-- 5 -->
+        <rect x="540" y="62" width="80" height="80" rx="9" fill="#fff" stroke="#cbd5e1"/>
+        <text x="580" y="84" font-size="11" font-weight="700" fill="#16212c">GeoJSON</text>
+        <text x="580" y="100" class="mono" font-size="8.5">data/maps/</text><text x="580" y="114">committed,</text><text x="580" y="127">reviewed in git</text>
+        <!-- 6 -->
+        <rect x="636" y="62" width="84" height="80" rx="9" fill="#0f766e"/>
+        <text x="678" y="84" font-size="11" font-weight="700" fill="#fff">On the map</text>
+        <text x="678" y="100" fill="#ccfbf1">CI bakes it</text><text x="678" y="113" fill="#ccfbf1">into the image</text><text x="678" y="126" fill="#ccfbf1">on merge</text>
+      </g>
+      <line x1="106" y1="102" x2="121" y2="102" stroke="#64748b" stroke-width="1.5" marker-end="url(#ah)"/>
+      <line x1="230" y1="102" x2="245" y2="102" stroke="#64748b" stroke-width="1.5" marker-end="url(#ah)"/>
+      <line x1="362" y1="102" x2="431" y2="102" stroke="#64748b" stroke-width="1.5" marker-end="url(#ah)"/>
+      <text x="396" y="94" font-size="8.5" fill="#5a6777" text-anchor="middle">reads every file</text>
+      <line x1="520" y1="102" x2="537" y2="102" stroke="#15803d" stroke-width="1.6" marker-end="url(#ah)"/>
+      <text x="528" y="94" font-size="8.5" fill="#15803d" text-anchor="middle" font-weight="700">yes</text>
+      <line x1="622" y1="102" x2="633" y2="102" stroke="#64748b" stroke-width="1.5" marker-end="url(#ah)"/>
+    </svg>
+
+    <div class="cols4" style="margin-top:10px">
+      <div class="card soft"><h4>Fast</h4><p>The server reads a file. No query to plan, nothing to join.</p></div>
+      <div class="card soft"><h4>Reviewable</h4><p>A data change is a git diff you can look at before it ships.</p></div>
+      <div class="card soft"><h4>Safe to share</h4><p>Public share links only ever read static files.</p></div>
+      <div class="card soft"><h4>Repeatable</h4><p>Same inputs, same bytes. A diff shows only real changes.</p></div>
+    </div>
+
+    <div class="cols w60" style="margin-top:12px">
+      <div>
+        <h3>Downloaded files are untrusted</h3>
+        <ul class="dots">
+          <li><b>Read zips in memory.</b> Never unzip next to your code, where something could get run.</li>
+          <li><b>Run tools with <code>python3 -I</code>.</b> Then a planted <code>json.py</code> inside a download can't be imported in place of the real one.</li>
+          <li><b>One broken file never stops the build.</b> The tool says what it skipped and why, and carries on.</li>
+          <li><b>Hand corrections are marked.</b> They live in a committed <code>overrides.json</code>, and the output flags them <code>"set_by_hand": true</code>.</li>
+          <li><b>Self-checks compare with the source's own totals.</b> The tool ends with <code>All checks OK.</code> or stops and writes nothing.</li>
+          <li><b>A public copy refuses to write</b> if any private text (names, notes, internal IDs) is still in it.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>What a feature looks like</h3>
+        <pre class="code light">{ "type": "Feature",
+  "properties": {
+    "layer": "pipe",
+    "name": "Mainline",
+    "stroke": "#1d4ed8",
+    "stroke_width": 5,
+    "note": "Invented demo pipe."
+  },
+  "geometry": { "type": "LineString",
+    "coordinates": [[lng, lat], …] } }</pre>
+        <p class="xs muted">The share viewer styles a shape from its properties alone, so a new simple map is often just a new file. Watch the order: GeoJSON is <b>[lng, lat]</b>, Leaflet is <b>[lat, lng]</b>.</p>
+        <div class="callout note"><span class="t">Live data is different</span>Machines and sensors are polled by the server every few minutes. The browser only reads what the server stored.</div>
+      </div>
+    </div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>docs/06-data-pipeline.md</code></span><span class="chip"><b>Prompt</b><code>08-geojson-build-tool</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 10 · CH7a ============================== -->
+<section class="page" id="ch7">
+  <div class="runhead"><span><b>7</b> · Where to run it</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap"><div class="num">7</div><div><h1>Where to run it</h1><p class="lede">The same Docker image runs in three places. What changes is who can reach it, who looks after the machine, and what it costs.</p></div></header>
+
+    <div class="cols3">
+      <div class="host">
+        <svg class="ic" viewBox="0 0 34 34"><rect x="5" y="7" width="24" height="16" rx="2" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/><path d="M2 27 H32" stroke="#475569" stroke-width="2.4" stroke-linecap="round"/></svg>
+        <h4>Your laptop</h4>
+        <dl><dt>Who can reach it</dt><dd>You, and your phone on the same Wi-Fi</dd><dt>Cost</dt><dd>Free</dd><dt>Goes down when</dt><dd>You close the lid</dd><dt>Good for</dt><dd><b>Building and testing</b></dd></dl>
+      </div>
+      <div class="host">
+        <svg class="ic" viewBox="0 0 34 34"><rect x="6" y="3" width="22" height="9" rx="2" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/><rect x="6" y="13" width="22" height="9" rx="2" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/><rect x="6" y="23" width="22" height="9" rx="2" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/><circle cx="23" cy="7.5" r="1.6" fill="#22c55e"/><circle cx="23" cy="17.5" r="1.6" fill="#22c55e"/><circle cx="23" cy="27.5" r="1.6" fill="#22c55e"/></svg>
+        <h4>Your own server</h4>
+        <dl><dt>Who can reach it</dt><dd>Your network, or the internet if you open ports 80 and 443</dd><dt>Cost</dt><dd>Hardware and power you already have</dd><dt>Goes down when</dt><dd>The office internet or power drops</dd><dt>Good for</dt><dd><b>Internal apps for staff</b></dd></dl>
+      </div>
+      <div class="host pick">
+        <svg class="ic" viewBox="0 0 34 34"><path d="M9 25 a6 6 0 0 1 1-12 a8 8 0 0 1 15 2 a5 5 0 0 1 0 10 z" fill="#ccfbf1" stroke="#0f766e" stroke-width="1.6"/><circle cx="17" cy="20" r="3" fill="#0f766e"/></svg>
+        <h4>A DigitalOcean droplet</h4>
+        <dl><dt>Who can reach it</dt><dd>Anyone on the internet</dd><dt>Cost</dt><dd>About $6 to $24 a month for a small app</dd><dt>Goes down when</dt><dd>Rarely. It doesn't depend on your building</dd><dt>Good for</dt><dd><b>Share links, customer maps, anything outsiders use</b></dd></dl>
+      </div>
+    </div>
+
+    <div class="callout rule" style="margin-top:12px"><span class="t">A common split</span>Internal apps on your own server, behind your login. Anything outsiders use on a droplet, so a power cut at the office can't take a customer's map offline.</div>
+
+    <svg class="dia" viewBox="0 0 720 150" style="margin-top:6px" role="img" aria-label="GitHub Actions builds the image and pushes it to GHCR; the laptop, your own server and a droplet all pull the same image.">
+      <rect x="0" y="50" width="124" height="54" rx="9" fill="#fff" stroke="#cbd5e1"/>
+      <text x="62" y="72" font-size="11" font-weight="700" text-anchor="middle" fill="#16212c">GitHub Actions</text>
+      <text x="62" y="88" font-size="9" text-anchor="middle" fill="#5a6777">builds on every merge</text>
+      <line x1="126" y1="77" x2="161" y2="77" stroke="#64748b" stroke-width="1.5" marker-end="url(#ah)"/>
+      <rect x="164" y="50" width="124" height="54" rx="9" fill="#0f766e"/>
+      <text x="226" y="72" font-size="11" font-weight="700" text-anchor="middle" fill="#fff">GHCR</text>
+      <text x="226" y="88" font-size="8.5" text-anchor="middle" fill="#ccfbf1" class="mono">&lt;owner&gt;/&lt;app&gt;:latest</text>
+      <path d="M290 77 C 330 77, 330 22, 372 22" fill="none" stroke="#0f766e" stroke-width="1.5" marker-end="url(#ahT)"/>
+      <path d="M290 77 H 370" fill="none" stroke="#0f766e" stroke-width="1.5" marker-end="url(#ahT)"/>
+      <path d="M290 77 C 330 77, 330 132, 372 132" fill="none" stroke="#0f766e" stroke-width="1.5" marker-end="url(#ahT)"/>
+      <text x="226" y="122" font-size="9" text-anchor="middle" fill="#0f766e" font-weight="700">every host pulls the same image</text>
+      <g font-size="10">
+        <rect x="374" y="4" width="344" height="36" rx="8" fill="#fff" stroke="#cbd5e1"/>
+        <text x="386" y="26" font-weight="700" fill="#16212c">Laptop</text><text x="450" y="26" fill="#5a6777" class="mono" font-size="9">docker compose up --build</text>
+        <rect x="374" y="59" width="344" height="36" rx="8" fill="#fff" stroke="#cbd5e1"/>
+        <text x="386" y="81" font-weight="700" fill="#16212c">Own server</text><text x="470" y="81" fill="#5a6777" font-size="9.5">Portainer pulls it: "Pull and redeploy"</text>
+        <rect x="374" y="114" width="344" height="36" rx="8" fill="#e5f4f1" stroke="#9fd8cf"/>
+        <text x="386" y="136" font-weight="700" fill="#0f766e">Droplet</text><text x="450" y="136" fill="#5a6777" class="mono" font-size="9">docker compose pull &amp;&amp; up -d</text>
+      </g>
+    </svg>
+
+    <div class="cols" style="margin-top:12px">
+      <div>
+        <h3>On your laptop</h3>
+        <pre class="code"><span class="p">$</span> npm run dev                <span class="c"># localhost:5173</span>
+<span class="p">$</span> npm run dev -- --host      <span class="c"># on your phone too</span>
+<span class="p">$</span> docker compose up --build  <span class="c"># the real image</span>
+<span class="p">$</span> curl -s localhost:8080/health
+<span class="o">{"status":"ok"}</span></pre>
+        <p class="small">Before you call a change done, run the <b>image</b>, not just the dev server. That catches a broken Dockerfile and files the build left out.</p>
+      </div>
+      <div>
+        <h3>On your own server</h3>
+        <ul class="dots small">
+          <li>A Linux box with Docker and a fixed address on your network.</li>
+          <li><b>Portainer</b> runs each app as a stack straight from its Git repo. The compose file names an image; the server never builds.</li>
+          <li><b>Caddy</b> in front for HTTPS (chapter 9), and your <b>login</b> for anything private (chapter 10).</li>
+          <li>Redeploy from a script with <code>scripts/portainer/redeploy.py</code>. It keeps the stack's settings. Done carelessly, a scripted redeploy wipes every secret (chapter 10 has the story).</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>docs/11-where-to-run-it.md</code></span><span class="chip"><b>Read</b><code>docs/08-deploy.md</code></span><span class="chip"><b>Prompt</b><code>10-dockerize-ci-portainer</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 11 · CH7b ============================== -->
+<section class="page">
+  <div class="runhead"><span><b>7</b> · Where to run it</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap cont"><div class="num">7</div><div><h1>A DigitalOcean droplet in a few minutes</h1><p class="lede">A droplet is a rented Linux computer in someone else's data centre, with its own public address. You log in with an SSH key and run Docker on it, just like your own server.</p></div></header>
+
+    <div class="cols" style="column-gap:24px">
+      <div>
+        <h3>Once, before your first droplet</h3>
+        <ol class="steps">
+          <li><b>An account with two-factor login.</b></li>
+          <li><b>An API token</b> with custom scopes (droplets, firewalls, reserved IPs, domains, SSH keys, tags) and an expiry, such as 90 days. Save it straight into <code>secrets/do.env</code>. <b>Never paste it into a chat.</b></li>
+          <li><b>Your laptop's SSH key</b> on the account. Only the public half (<code>.pub</code>) is uploaded.</li>
+        </ol>
+        <h3>Every time</h3>
+        <pre class="code"><span class="p">$</span> scripts/do/provision-droplet.sh --dry-run
+<span class="c">  the plan and the cost; no token, no API calls</span>
+<span class="p">$</span> scripts/do/provision-droplet.sh
+<span class="c">  shows the plan and the price, asks, then does it</span>
+<span class="o">droplet_id=123456789
+ip=203.0.113.10</span>
+<span class="p">$</span> ssh app@203.0.113.10 cloud-init status --wait
+<span class="p">$</span> scripts/do/check-health.sh \
+    https://maps.example.com
+<span class="g">HEALTHY: HTTP 200, status ok, …</span></pre>
+        <h3>What the script sets up</h3>
+        <ol class="steps">
+          <li>Checks that your SSH key is on the account <b>and</b> on this laptop.</li>
+          <li>Creates the droplet with a tag, monitoring, backups and the first-boot file.</li>
+          <li>Gives it a <b>reserved IP</b>, reusing a spare one before buying another.</li>
+          <li>Attaches the <b>cloud firewall by tag</b> (22, 80, 443 in), then checks it really covers the droplet.</li>
+          <li>Creates the DNS record, or tells you exactly which one to add.</li>
+        </ol>
+        <p class="small muted">Each step is skipped when it's already right, so running it again is safe.</p>
+      </div>
+      <div>
+        <h3>First boot does the chores</h3>
+        <p class="small">A <b>cloud-init</b> file sets the machine up before you ever log in: security updates (and automatic ones after), SSH keys only with no passwords, a firewall and <code>fail2ban</code>, Docker with log limits and a weekly clean-up, a non-root user <code>app</code>, some swap, and your app behind Caddy. <b>Nothing secret goes in that file:</b> anything on the droplet can read it.</p>
+        <h3>What it costs</h3>
+        <table class="t">
+          <tr><th>Item</th><th>Roughly</th></tr>
+          <tr><td><code>s-1vcpu-1gb</code></td><td>$6 a month: a static map app like the demo</td></tr>
+          <tr><td><code>s-1vcpu-2gb</code></td><td>$12 a month: app, API and a small Postgres</td></tr>
+          <tr><td><code>s-2vcpu-4gb</code></td><td>$24 a month: several apps</td></tr>
+          <tr><td>Backups</td><td>+20% weekly, +30% daily</td></tr>
+          <tr><td>Reserved IP</td><td>Free while assigned, <b>about $5 a month when it isn't</b></td></tr>
+        </table>
+        <p class="xs muted" style="margin-top:-4px">Billed by the hour, capped at the monthly price. <b>A droplet that's switched off still bills.</b> Only destroying it stops the charge.</p>
+        <div class="callout trap"><span class="t">Traps we hit, so you don't</span>
+          <ul class="dots" style="margin:2px 0 0">
+            <li><b>A re-created droplet gets a new ID.</b> A firewall attached by ID protects the dead one. Attach by tag.</li>
+            <li><b>Destroying a droplet keeps its reserved IP,</b> still billing. Reuse it or release it.</li>
+            <li><b>Long jobs over SSH die with the session.</b> Run them detached with <code>nohup … &amp;</code> and watch the log.</li>
+            <li><b>A 502 is good news, mostly.</b> DNS, the certificate and Caddy work; the app behind them doesn't.</li>
+            <li><b>macOS has no <code>timeout</code> command,</b> so a probe built on it always "fails". Use <code>curl --max-time</code>.</li>
+          </ul>
+        </div>
+        <p class="small"><b>Tearing down:</b> <code>destroy-droplet.sh --dry-run</code>, then the real run, which asks you to type the droplet's name. <b>DNS kept elsewhere? Delete the A record yourself, straight away.</b> A record pointing at a released IP can be taken over by whoever gets that IP next.</p>
+      </div>
+    </div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>docs/11-where-to-run-it.md</code></span><span class="chip"><b>Files</b><code>scripts/do/</code></span><span class="chip"><b>Prompt</b><code>13-host-on-digitalocean</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 12 · CH8 ============================== -->
+<section class="page" id="ch8">
+  <div class="runhead"><span><b>8</b> · Keys and scripts</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap"><div class="num">8</div><div><h1>Keys and scripts</h1><p class="lede">Building with an AI agent gives a key more ways to escape: the chat, the agent's transcript, a settings file, a log, a commit. The fix is simple. Give the agent scripts, not keys.</p></div></header>
+
+    <svg class="dia" viewBox="0 0 720 228" role="img" aria-label="The agent runs a script; the script reads the key from secrets or the Keychain at run time, calls the API, and prints only safe results back into the chat. The key never enters the chat.">
+      <!-- chat zone -->
+      <rect x="2" y="8" width="272" height="216" rx="12" fill="#f8fafc" stroke="#b91c1c" stroke-width="1.4" stroke-dasharray="6 4"/>
+      <text x="16" y="28" font-size="9.5" font-weight="700" fill="#b91c1c" letter-spacing="1.2">THE CHAT · NO KEY EVER IN HERE</text>
+      <!-- you -->
+      <circle cx="38" cy="62" r="11" fill="#0f766e"/><path d="M21 94 a17 15 0 0 1 34 0 z" fill="#0f766e"/>
+      <text x="38" y="110" font-size="10.5" font-weight="700" text-anchor="middle" fill="#16212c">You</text>
+      <rect x="66" y="40" width="196" height="26" rx="12" fill="#0f766e"/>
+      <text x="77" y="57" font-size="9.8" fill="#fff">"Create the droplet for the maps app."</text>
+      <rect x="66" y="74" width="122" height="24" rx="12" fill="#0f766e"/>
+      <text x="77" y="90" font-size="9.8" fill="#fff">"Plan looks right. Go."</text>
+      <!-- output seen in chat -->
+      <text x="66" y="118" font-size="8.8" fill="#15803d" font-weight="700">what comes back: safe results only</text>
+      <rect x="66" y="124" width="196" height="38" rx="8" fill="#162130"/>
+      <text x="78" y="140" font-size="9" fill="#fcd38a" class="mono">droplet_id=123456789</text>
+      <text x="78" y="154" font-size="9" fill="#fcd38a" class="mono">ip=203.0.113.10</text>
+      <!-- agent -->
+      <rect x="16" y="174" width="246" height="40" rx="9" fill="#fff" stroke="#cbd5e1"/>
+      <text x="28" y="191" font-size="10.5" font-weight="700" fill="#16212c">Agent</text>
+      <text x="28" y="205" font-size="9.2" fill="#5a6777">shows the dry-run plan first, then runs it</text>
+      <!-- script -->
+      <rect x="318" y="62" width="168" height="84" rx="10" fill="#0f766e"/>
+      <text x="402" y="88" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fff" class="mono">provision-droplet.sh</text>
+      <text x="402" y="106" font-size="9.2" text-anchor="middle" fill="#ccfbf1">one job, a dry run, asks first,</text>
+      <text x="402" y="120" font-size="9.2" text-anchor="middle" fill="#ccfbf1">never prints the key</text>
+      <path d="M264 194 C 300 194, 300 146, 330 146" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#ah)"/>
+      <text x="300" y="206" font-size="9" fill="#5a6777">runs it</text>
+      <path d="M316 120 C 292 120, 292 143, 266 143" fill="none" stroke="#15803d" stroke-width="1.6" marker-end="url(#ah)"/>
+      <text x="292" y="114" font-size="9" fill="#15803d" font-weight="700" text-anchor="middle">prints</text>
+      <!-- key store -->
+      <rect x="330" y="176" width="144" height="42" rx="9" fill="#fff4dd" stroke="#f59e0b"/>
+      <path d="M344 191 a5 5 0 1 1 7 4.5 l0 3 l3 0 l0 3 l-3 0 l0 2 l-4 0 l0 -8.5 a5 5 0 0 1 -3 -4" fill="#d97706"/>
+      <text x="362" y="193" font-size="9" font-weight="700" fill="#7c3d06" class="mono">secrets/do.env</text>
+      <text x="362" y="208" font-size="8.8" fill="#7c3d06">or the macOS Keychain</text>
+      <line x1="402" y1="175" x2="402" y2="150" stroke="#d97706" stroke-width="1.6" marker-end="url(#ahA)"/>
+      <text x="408" y="166" font-size="8.8" fill="#b45309" font-weight="700">reads it at run time</text>
+      <!-- API -->
+      <rect x="562" y="62" width="154" height="84" rx="10" fill="#fff" stroke="#cbd5e1"/>
+      <text x="639" y="90" font-size="10.5" font-weight="700" text-anchor="middle" fill="#16212c">DigitalOcean API</text>
+      <text x="639" y="108" font-size="9.2" text-anchor="middle" fill="#5a6777">droplet, firewall,</text>
+      <text x="639" y="122" font-size="9.2" text-anchor="middle" fill="#5a6777">reserved IP, DNS</text>
+      <line x1="488" y1="104" x2="559" y2="104" stroke="#d97706" stroke-width="1.6" marker-end="url(#ahA)"/>
+      <text x="524" y="96" font-size="9" text-anchor="middle" fill="#b45309" font-weight="700">uses the key</text>
+      <text x="402" y="40" font-size="9.5" text-anchor="middle" fill="#334155" font-weight="700">The key goes from the file, to the script, to the API.</text>
+      <text x="402" y="54" font-size="9.5" text-anchor="middle" fill="#334155">Nobody types it, and nobody sees it.</text>
+    </svg>
+
+    <div class="cols" style="margin-top:12px">
+      <div class="yes"><h4>Keys live here</h4><ul>
+        <li><code>secrets/*.env</code>: gitignored as <code>/secrets/</code>, <code>chmod 600</code></li>
+        <li>The macOS Keychain</li>
+        <li>On the server: the Portainer stack settings, or the droplet's own <code>.env</code></li>
+        <li>CI secrets in GitHub</li></ul></div>
+      <div class="no"><h4>Never here</h4><ul>
+        <li>A chat, a prompt, an issue or a screenshot</li>
+        <li>A command line or a URL (shell history, <code>ps</code>, logs)</li>
+        <li>An agent's settings file, or any committed file</li>
+        <li>A Docker image, or a server's first-boot file</li></ul></div>
+    </div>
+
+    <div class="cols" style="margin-top:12px">
+      <div>
+        <h3>The rules for a key-safe script</h3>
+        <ol class="steps">
+          <li>Reads the key when it runs, from <code>secrets/</code> or the Keychain. Never takes it as an argument.</li>
+          <li>Never prints it: no <code>set -x</code>, no dumping whole API responses.</li>
+          <li>Does <b>one</b> job, and its name says which.</li>
+          <li>Prints only safe results: IDs, addresses, names, status codes.</li>
+          <li>Has a <code>--dry-run</code> that needs no key at all.</li>
+          <li>Asks before it spends money or touches production.</li>
+        </ol>
+      </div>
+      <div>
+        <h3>Scan before you push</h3>
+        <pre class="code" style="font-size:7.1pt"><span class="p">$</span> scripts/secrets/scan-before-push.sh \
+    --env-file secrets/do.env \
+    --denylist secrets/denylist.txt
+<span class="o">  docs/notes.md:14  env-value   value of PORTAINER_URL
+  src/config.ts:9   private-ip  private IP (192.168.x)</span>
+<span class="r">2 finding(s)</span>  <span class="c"># where and what kind, never the value</span></pre>
+        <div class="callout never" style="margin-top:6px"><span class="t">If a key leaks</span><b>Revoke it first,</b> then make a replacement, check what the old key did, clean up where it leaked, and fix the cause. A key pasted into a chat counts as leaked.</div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:2px">Check a key is there, without seeing it</h3>
+    <pre class="code"><span class="p">$</span> scripts/lib/load-env.sh --check --file secrets/do.env DIGITALOCEAN_ACCESS_TOKEN
+<span class="o">DIGITALOCEAN_ACCESS_TOKEN        found (file secrets/do.env, 71 chars)</span>  <span class="c"># never the value</span></pre>
+
+    <div class="more"><span class="chip"><b>Read</b><code>docs/12-keys-and-scripts.md</code></span><span class="chip"><b>Files</b><code>scripts/README.md</code></span><span class="chip"><b>Prompt</b><code>14-key-safe-scripts</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 13 · CH9 ============================== -->
+<section class="page" id="ch9">
+  <div class="runhead"><span><b>9</b> · HTTPS with Caddy</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap"><div class="num">9</div><div><h1>HTTPS with Caddy</h1><p class="lede">One Caddy container is the front door for every app. It gets the padlock certificates, renews them by itself, and sends each hostname to the right app.</p></div></header>
+
+    <svg class="dia" viewBox="0 0 720 218" role="img" aria-label="Browser to Cloudflare to Caddy, which routes map, auth and tools hostnames to the map app, Authentik and a tool behind forward_auth; Caddy gets and renews certificates from Let's Encrypt.">
+      <rect x="0" y="86" width="96" height="52" rx="9" fill="#fff" stroke="#cbd5e1"/>
+      <text x="48" y="116" font-size="11" font-weight="700" text-anchor="middle" fill="#16212c">Browser</text>
+      <!-- cloudflare cloud -->
+      <path d="M140 132 a16 16 0 0 1 2-32 a22 22 0 0 1 41-6 a16 16 0 0 1 23 14 a12 12 0 0 1 -2 24 z" fill="#fff4dd" stroke="#f59e0b" stroke-width="1.5"/>
+      <text x="173" y="120" font-size="10.5" font-weight="700" text-anchor="middle" fill="#7c3d06">Cloudflare</text>
+      <line x1="98" y1="112" x2="129" y2="112" stroke="#64748b" stroke-width="1.5" marker-end="url(#ah)"/>
+      <text x="114" y="104" font-size="8" text-anchor="middle" fill="#5a6777">proxied</text>
+      <line x1="216" y1="114" x2="263" y2="114" stroke="#64748b" stroke-width="1.5" marker-end="url(#ah)"/>
+      <text x="240" y="106" font-size="8" text-anchor="middle" fill="#b45309" font-weight="700">Full (strict)</text>
+      <path d="M48 140 C 60 190, 230 196, 268 150" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+      <text x="140" y="196" font-size="8.5" text-anchor="middle" fill="#5a6777">or a "DNS only" record, straight to Caddy</text>
+      <!-- caddy -->
+      <g filter="url(#sh)"><rect x="266" y="66" width="130" height="96" rx="12" fill="#0f766e"/></g>
+      <text x="331" y="96" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">Caddy</text>
+      <text x="331" y="113" font-size="9" text-anchor="middle" fill="#ccfbf1">the only thing on</text>
+      <text x="331" y="126" font-size="9" text-anchor="middle" fill="#ccfbf1">ports 80 and 443</text>
+      <text x="331" y="146" font-size="8.5" text-anchor="middle" fill="#99f6e4">one block per hostname</text>
+      <!-- lets encrypt -->
+      <rect x="276" y="2" width="110" height="38" rx="8" fill="#fff" stroke="#cbd5e1"/>
+      <text x="331" y="18" font-size="10" font-weight="700" text-anchor="middle" fill="#16212c">Let's Encrypt</text>
+      <text x="331" y="32" font-size="8.5" text-anchor="middle" fill="#5a6777">free certificates</text>
+      <line x1="331" y1="43" x2="331" y2="63" stroke="#0f766e" stroke-width="1.5" marker-start="url(#ahT)" marker-end="url(#ahT)"/>
+      <text x="338" y="57" font-size="8" fill="#0f766e" font-weight="700">get and renew</text>
+      <!-- routes -->
+      <g font-size="9.5">
+        <path d="M398 92 C 430 92, 430 30, 462 30" fill="none" stroke="#0f766e" stroke-width="1.5" marker-end="url(#ahT)"/>
+        <path d="M398 114 H 460" fill="none" stroke="#0f766e" stroke-width="1.5" marker-end="url(#ahT)"/>
+        <path d="M398 136 C 430 136, 430 198, 462 198" fill="none" stroke="#0f766e" stroke-width="1.5" marker-end="url(#ahT)"/>
+        <rect x="464" y="10" width="254" height="40" rx="8" fill="#fff" stroke="#cbd5e1"/>
+        <text x="474" y="27" class="mono" font-size="9" font-weight="700" fill="#0f766e">maps.example.com</text>
+        <text x="474" y="41" fill="#5a6777">→ the map app, published on port 8080</text>
+        <rect x="464" y="94" width="254" height="40" rx="8" fill="#eef0fd" stroke="#818cf8"/>
+        <text x="474" y="111" class="mono" font-size="9" font-weight="700" fill="#4338ca">auth.example.com</text>
+        <text x="474" y="125" fill="#5a6777">→ Authentik (chapter 10). No login in front.</text>
+        <rect x="464" y="178" width="254" height="40" rx="8" fill="#fff" stroke="#cbd5e1"/>
+        <text x="474" y="195" class="mono" font-size="9" font-weight="700" fill="#0f766e">tools.example.com</text>
+        <text x="474" y="209" fill="#5a6777">→ login first; the tool publishes no port</text>
+      </g>
+    </svg>
+
+    <div class="cols" style="margin-top:12px;column-gap:24px">
+      <div>
+        <h3>One app, start to finish</h3>
+        <ol class="steps">
+          <li><b>DNS:</b> an A record <code>maps.example.com → 203.0.113.10</code>.</li>
+          <li><b>Ports:</b> open 80 and 443 at the firewall (and the router, if the server is at the office).</li>
+          <li><b>The Caddyfile:</b></li>
+        </ol>
+        <pre class="code" style="margin-left:25px">maps.example.com {
+	encode zstd gzip
+	reverse_proxy host.docker.internal:8080
+}</pre>
+        <ol class="steps" start="4" style="counter-reset:s 3">
+          <li><b>Run Caddy</b> with a named volume on <code>/data</code>. That's where certificates live. <b>Keep it,</b> or Caddy asks for them all again and hits rate limits.</li>
+          <li><b>Watch the log</b> for <code>certificate obtained successfully</code>. Renewal happens by itself from then on.</li>
+        </ol>
+      </div>
+      <div>
+        <h3>Cloudflare in front</h3>
+        <table class="t">
+          <tr><th>SSL mode</th><th>Cloudflare to your server</th></tr>
+          <tr><td>Flexible</td><td><span class="pill red">Never</span> Plain HTTP. Caddy redirects to HTTPS, Cloudflare asks again over HTTP, forever.</td></tr>
+          <tr><td>Full</td><td>HTTPS, but any certificate is accepted.</td></tr>
+          <tr><td>Full (strict)</td><td><span class="pill">Use this</span> HTTPS with a valid certificate. Caddy's is.</td></tr>
+        </table>
+        <p class="small"><b>One wildcard certificate</b> for <code>*.example.com</code> comes through Cloudflare's DNS. Then a new app needs no new certificate, port 80 can stay shut, and staff-only apps on an internal address still get a real padlock. It needs Caddy built with the Cloudflare plugin, and a token that can edit DNS for <b>one</b> zone only.</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top:4px">When it goes wrong</h3>
+    <table class="t">
+      <tr><th style="width:30%">What you see</th><th>What it means</th></tr>
+      <tr><td>502 Bad Gateway from Caddy</td><td>Caddy can't reach the app: stopped, wrong port, or bound to 127.0.0.1. DNS and certificates are fine.</td></tr>
+      <tr><td><code>ERR_TOO_MANY_REDIRECTS</code></td><td>Cloudflare's SSL mode is Flexible. Switch it to Full (strict).</td></tr>
+      <tr><td>The challenge fails right away</td><td>DNS doesn't point at the server yet. Check with <code>dig +short</code>, wait, then reload Caddy.</td></tr>
+      <tr><td>Sign-in loops, no secure cookie</td><td>The app doesn't trust the proxy. Express needs <code>app.set('trust proxy', 1)</code>.</td></tr>
+    </table>
+
+    <div class="more"><span class="chip"><b>Read</b><code>docs/13-https-with-caddy.md</code></span><span class="chip"><b>Files</b><code>infra/caddy/</code></span><span class="chip"><b>Prompt</b><code>15-https-with-caddy</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 14 · CH10a ============================== -->
+<section class="page" id="ch10">
+  <div class="runhead"><span><b>10</b> · Optional login with Authentik</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap"><div class="num">10</div><div><h1>Optional login with Authentik</h1><p class="lede">Some maps should open for anyone. Others show real data and should only open for the right people. One login server handles every app that needs it.</p></div></header>
+
+    <div class="cols w40" style="column-gap:22px">
+      <div>
+        <h3>Do you need it?</h3>
+        <table class="t">
+          <tr><th>The map is…</th><th>Login?</th></tr>
+          <tr><td>A public demo, a visitor map, a kiosk</td><td><span class="pill gray">No</span></td></tr>
+          <tr><td>A share link for someone outside</td><td><span class="pill gray">No</span> The token is the lock.</td></tr>
+          <tr><td>Staff maps with real fields, machines or customers</td><td><span class="pill">Yes</span></td></tr>
+          <tr><td>A ready-made tool with no login of its own</td><td><span class="pill">Yes</span> Caddy checks first.</td></tr>
+        </table>
+        <h3>The words</h3>
+        <ul class="dots small">
+          <li><b>Identity provider (IdP):</b> the one server that knows your users, passwords and passkeys. We run <b>Authentik</b>: self-hosted, open source, free.</li>
+          <li><b>OIDC:</b> the standard the apps and the IdP use to talk.</li>
+          <li><b>Client ID and secret:</b> the app's own username and password <i>at the IdP</i>. The secret lives only on the app's server.</li>
+          <li><b>Redirect URI:</b> where the IdP sends people back. It must match exactly.</li>
+          <li><b>Groups → roles:</b> people go in groups (<code>fieldmap-operators</code>); the app turns groups into admin, operator or viewer.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>How a sign-in works</h3>
+        <svg class="dia" viewBox="0 0 400 348" role="img" aria-label="Sign-in sequence between browser, map app and Authentik.">
+          <g font-size="10.5" font-weight="700" text-anchor="middle">
+            <rect x="4" y="2" width="96" height="26" rx="7" fill="#1f2b3c"/><text x="52" y="19" fill="#fff">Browser</text>
+            <rect x="152" y="2" width="96" height="26" rx="7" fill="#0f766e"/><text x="200" y="19" fill="#fff">Map app</text>
+            <rect x="300" y="2" width="96" height="26" rx="7" fill="#4f46e5"/><text x="348" y="19" fill="#fff">Authentik</text>
+          </g>
+          <g stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="3 3"><line x1="52" y1="30" x2="52" y2="346"/><line x1="200" y1="30" x2="200" y2="346"/><line x1="348" y1="30" x2="348" y2="346"/></g>
+          <g font-size="9" fill="#2c3a48" class="lbl">
+            <line x1="54" y1="52" x2="196" y2="52" stroke="#64748b" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="60" y="46">opens /?layers=fields (no session)</text>
+            <line x1="198" y1="84" x2="56" y2="84" stroke="#64748b" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="64" y="78">"sign in first", remembering the page</text>
+            <line x1="54" y1="116" x2="344" y2="116" stroke="#4f46e5" stroke-width="1.4" marker-end="url(#ahV)"/>
+            <text x="150" y="110">password or passkey</text>
+            <line x1="346" y1="148" x2="56" y2="148" stroke="#4f46e5" stroke-width="1.4" marker-end="url(#ahV)"/>
+            <text x="120" y="142">back to the app with a one-time code</text>
+            <line x1="54" y1="180" x2="196" y2="180" stroke="#64748b" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="64" y="174">here's the code</text>
+            <line x1="202" y1="212" x2="344" y2="212" stroke="#0f766e" stroke-width="1.4" marker-end="url(#ahT)"/>
+            <text x="208" y="206">code + secret → who is it?</text>
+            <line x1="346" y1="240" x2="204" y2="240" stroke="#0f766e" stroke-width="1.4" marker-end="url(#ahT)"/>
+            <text x="212" y="234">name, email, groups</text>
+            <rect x="150" y="252" width="100" height="36" rx="6" fill="#e5f4f1" stroke="#9fd8cf"/>
+            <text x="200" y="267" text-anchor="middle" font-weight="700" fill="#0f766e">groups → role</text>
+            <text x="200" y="280" text-anchor="middle" fill="#0f766e">no group? "no access"</text>
+            <line x1="198" y1="314" x2="56" y2="314" stroke="#64748b" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="62" y="308">session cookie, back to /?layers=fields</text>
+            <text x="206" y="334" font-size="8.5" fill="#5a6777">server to server: the secret never</text>
+            <text x="206" y="345" font-size="8.5" fill="#5a6777">reaches the browser</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <h3 style="margin-top:8px">Two ways to protect a map app</h3>
+    <div class="cols">
+      <div class="card teal"><h4>(a) The app signs people in itself</h4><p>Login, callback, "who am I" and logout routes, about 200 lines with comments. Roles, public share pages in the same app, and clean "please sign in again" answers from the API. <b>Use it for your own map apps.</b> The demo's optional server in <code>example/server/</code> does exactly this, and it's off by default.</p></div>
+      <div class="card"><h4>(b) Caddy checks with Authentik first</h4><p>No code in the app at all: Caddy asks Authentik before every request ("forward auth"). Only "in the group or not". <b>Use it for ready-made tools</b> with no login of their own. One app, one mechanism: never both.</p></div>
+    </div>
+
+    <h3 style="margin-top:12px">Running Authentik</h3>
+    <div class="cols">
+      <ul class="dots small">
+        <li><b>Three containers:</b> PostgreSQL, the server and a worker. No Redis since release 2025.10, whatever older guides say.</li>
+        <li><b>Two generated secrets,</b> written into <code>.env</code> unseen. Set the secret key once; never change it.</li>
+      </ul>
+      <ul class="dots small">
+        <li><b>Set the admin password straight away.</b> Until you do, whoever opens the setup page first becomes the admin.</li>
+        <li><b>Bind your groups to each app.</b> By default every Authentik user can sign in to every application.</li>
+      </ul>
+    </div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>docs/14-login-with-authentik.md</code></span><span class="chip"><b>Files</b><code>infra/authentik/</code></span><span class="chip"><b>Prompt</b><code>16-authentik-login</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 15 · CH10b ============================== -->
+<section class="page">
+  <div class="runhead"><span><b>10</b> · Optional login with Authentik</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap cont"><div class="num">10</div><div><h1>Logout, passkeys, and failing closed</h1><p class="lede">Three things that look finished long before they are.</p></div></header>
+
+    <div class="cols" style="column-gap:24px">
+      <div>
+        <h3>Logout that really logs out</h3>
+        <p>There are three sessions: the <b>app's</b>, <b>Authentik's</b>, and the user's sessions in <b>other apps</b>. Clearing only the app's cookie isn't a logout. The next visit goes to Authentik, Authentik still knows you, and you're straight back in without a password. To the user it looks like the button doesn't work.</p>
+        <svg class="dia" viewBox="0 0 330 92" role="img" aria-label="Three sessions: app, Authentik, other apps.">
+          <rect x="0" y="6" width="100" height="50" rx="8" fill="#e5f4f1" stroke="#0f766e"/>
+          <text x="50" y="27" font-size="10" font-weight="700" text-anchor="middle" fill="#0f766e">App session</text>
+          <text x="50" y="42" font-size="8.5" text-anchor="middle" fill="#0f766e">the cookie</text>
+          <rect x="115" y="6" width="100" height="50" rx="8" fill="#eef0fd" stroke="#4f46e5"/>
+          <text x="165" y="27" font-size="10" font-weight="700" text-anchor="middle" fill="#4338ca">Authentik</text>
+          <text x="165" y="42" font-size="8.5" text-anchor="middle" fill="#4338ca">session</text>
+          <rect x="230" y="6" width="100" height="50" rx="8" fill="#fff" stroke="#94a3b8" stroke-dasharray="4 3"/>
+          <text x="280" y="27" font-size="10" font-weight="700" text-anchor="middle" fill="#334155">Other apps</text>
+          <text x="280" y="42" font-size="8.5" text-anchor="middle" fill="#334155">single logout</text>
+          <text x="0" y="78" font-size="9" fill="#b91c1c" font-weight="700">✕ clearing only the first one</text>
+          <text x="165" y="78" font-size="9" fill="#15803d" font-weight="700">✓ the first two, at least</text>
+        </svg>
+        <div class="callout trap"><span class="t">The trap</span>Authentik's default sign-out step for new apps (<code>default-provider-invalidation-flow</code>) shows "You've logged out" and <b>leaves the Authentik session alive.</b> Send people to <code>default-invalidation-flow</code> instead, or set it as the app's invalidation flow.</div>
+        <p class="small"><b>The order matters:</b> ask the server to end its session first, then go to the logout page. Don't mark yourself "signed out" in the page before leaving, or the app starts a fresh sign-in and Authentik lets you straight back in.</p>
+        <p class="small"><b>The test that proves it:</b> sign out, open the app again. Authentik must ask for a password or passkey.</p>
+
+        <h3>Passkeys</h3>
+        <p class="small">A passkey is a key pair kept by your phone or laptop (Face ID, Touch ID, a password manager) or a hardware key. Signing in is a glance or a fingerprint, there's nothing to type, and it can't be phished: it only answers to the real <code>auth.example.com</code>. Since every app sends people there, <b>one passkey works for all of them.</b> The demo's user menu shows "Add a passkey" when the server has the link. Ask everyone to enroll two.</p>
+      </div>
+      <div>
+        <h3>Fail closed: the section not to skip</h3>
+        <div class="callout never"><span class="t">What happened to us</span>A scripted redeploy replaced a production app's whole environment with an empty one. The "sign-in enabled" setting fell back to its development default of <b>off</b>, and a development shortcut ("no sign-in configured means everyone is a local admin") switched on. For a while the production map served everything to everyone, as admin. Nothing crashed, so nothing told us.</div>
+        <div class="callout rule"><span class="t">The rule</span>A missing or unsafe login setting must <b>stop the app from starting</b>. A container stuck restarting gets noticed in minutes. An app quietly running open can go unnoticed for weeks.</div>
+        <h3>Three layers, and you want all three</h3>
+        <ol class="steps">
+          <li><b>The app refuses to start</b> in production without sign-in, with a weak session secret, or with a half-set login config. A public demo has to say so on purpose: <code>ALLOW_NO_AUTH=true</code>.</li>
+          <li><b>No development shortcut in production,</b> even if the start-up check is somehow skipped.</li>
+          <li><b>The deploy file refuses to deploy</b> without the secrets (<code>${SESSION_SECRET:?}</code>), and a lost flag defaults to the safe value.</li>
+        </ol>
+        <pre class="code"><span class="p">$</span> docker run --rm react-maps-example:server
+<span class="r">FATAL: Sign-in is off (OIDC_ENABLED is not "true")
+and NODE_ENV=production. Refusing to start an open
+server. …</span></pre>
+        <h3>Check from outside after every deploy</h3>
+        <pre class="code"><span class="p">$</span> curl -s https://maps.example.com/health
+<span class="o">{"status":"ok","auth":"oidc"}</span>
+<span class="p">$</span> curl -s -o /dev/null -w '%{http_code}\n' \
+    https://maps.example.com/api/x
+<span class="o">401</span>     <span class="c"># signed out means no data</span></pre>
+      </div>
+    </div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>docs/14-login-with-authentik.md</code> §4–6</span><span class="chip"><b>Read</b><code>docs/07-auth.md</code></span><span class="chip"><b>Code</b><code>example/server/config.js</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 16 · CH11 ============================== -->
+<section class="page" id="ch11">
+  <div class="runhead"><span><b>11</b> · Mobile first</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap"><div class="num">11</div><div><h1>Mobile first</h1><p class="lede">Most of our maps are used standing in a field, on a phone, in sunlight, sometimes with gloves on. Design for that first, and the desktop comes along for free.</p></div></header>
+
+    <p class="xs muted" style="margin:0 0 6px;font-weight:600;letter-spacing:.06em;text-transform:uppercase">The four sizes we check every time · drawn to the same scale</p>
+    <div style="display:flex;align-items:flex-end;gap:14px">
+      <figure style="width:1.03in;flex:none"><div class="phone" style="padding:3px;border-radius:13px"><img src="../img/example-map-320x568.png" alt="320 by 568" style="border-radius:10px"></div><figcaption><b>320 × 568</b><br>The smallest phone still in use.</figcaption></figure>
+      <figure style="width:1.25in;flex:none"><div class="phone" style="padding:3px;border-radius:13px"><img src="../img/example-bottom-sheet-390x844.png" alt="390 by 844" style="border-radius:10px"></div><figcaption><b>390 × 844</b><br>A typical phone, list open.</figcaption></figure>
+      <figure style="width:2.71in;flex:none"><div class="phone land" style="padding:3px;border-radius:12px"><img src="../img/example-side-panel-844x390.png" alt="844 by 390" style="border-radius:9px"></div><figcaption><b>844 × 390</b> The same phone sideways: the one people forget. The list sheet becomes a side panel; drawers stay drawers.</figcaption></figure>
+      <div style="flex:1;min-width:0;align-self:stretch;display:flex;flex-direction:column;justify-content:flex-end">
+        <h3>Look for</h3>
+        <ul class="dots xs" style="margin:0">
+          <li>No sideways scrolling, nothing cut off.</li>
+          <li>Nothing under the notch or the home bar.</li>
+          <li>A top bar of one or two lines.</li>
+          <li>The user menu opens on top.</li>
+          <li>Buttons big enough for a thumb.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="grid2" style="grid-template-columns:4.12in 1fr;margin-top:14px">
+      <figure><div class="browser"><div class="bar"><i></i><i></i><i></i></div><img src="../img/example-popup-1280x800.png" alt="1280 by 800"></div><figcaption><b>1280 × 800</b> A laptop. Nothing ships until every page has been looked at in all four sizes. The public share page gets its own check.</figcaption></figure>
+      <div>
+        <h3>What makes the difference</h3>
+        <ul class="dots small">
+          <li><b>Really full screen.</b> Use the "dynamic" screen height, <code>100dvh</code>. Plain <code>height: 100%</code> showed only the top quarter of the map on iPhones.</li>
+          <li><b>Tell Leaflet when its box changes:</b> a rotation, a drawer, the address bar sliding away. Otherwise tiles land off the grid.</li>
+          <li><b>Safe areas on every edge.</b> A phone held sideways has its notch on the side.</li>
+          <li><b>Every target at least 44 × 44 px,</b> even Leaflet's tiny popup close button.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="cols" style="margin-top:4px">
+      <div class="callout rule"><span class="t">Dialogs become bottom sheets</span>On a phone, every dialog slides up from the bottom, and has three ways out: ✕, a tap outside, and Escape. Once, a typo removed a sheet's buttons and people were stuck.</div>
+      <div class="callout trap"><span class="t">Screenshots can lie</span>A resized headless browser lays pages out wider than it claims. Test with a real phone-sized viewport (Playwright), then on a real phone, in the sun.</div>
+    </div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>docs/09-mobile-first.md</code></span><span class="chip"><b>Prompt</b><code>09-mobile-pass</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 17 · CH12a ============================== -->
+<section class="page" id="ch12">
+  <div class="runhead"><span><b>12</b> · Building it with an AI agent</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap"><div class="num">12</div><div><h1>Building it with an AI agent</h1><p class="lede">The prompts say <i>what</i> to build. The docs explain <i>why</i>. An agent does its best work when it has both, and you check what it shows you.</p></div></header>
+
+    <div class="cols" style="column-gap:24px">
+      <div>
+        <h3>Set up once</h3>
+        <ol class="steps">
+          <li><b>Paste the house rules</b> from <code>prompts/README.md</code> into your agent's instructions file (<code>CLAUDE.md</code>, <code>AGENTS.md</code>). Every session then starts with them.</li>
+          <li><b>Copy the playbook's <code>docs/</code></b> into your repo as <code>docs/playbook/</code>, so the agent can read them.</li>
+          <li><b>One prompt per branch, one branch per session.</b> Small steps are easier to check, and easier for the agent to get right.</li>
+        </ol>
+        <h3 style="margin-top:14px">Every prompt has the same five parts</h3>
+        <div class="anat">
+          <div><b>Goal</b><span>What you want, in plain words, with your blanks filled in.</span></div>
+          <div><b>Read first</b><span>The doc sections that explain the pattern.</span></div>
+          <div><b>Constraints</b><span>The non-negotiables: what we learned the hard way.</span></div>
+          <div><b>Acceptance checks</b><span>How you both know it's finished.</span></div>
+          <div><b>How to verify</b><span>What the agent must show you: screenshots, output.</span></div>
+        </div>
+        <p class="small" style="margin-top:10px">Fill in the <code>&lt;angle-bracket&gt;</code> parts, paste everything inside the box, and ask for the plan before any code. <b>Don't accept "done" until the acceptance checks pass and you've seen the screenshots yourself.</b></p>
+      </div>
+      <div>
+        <h3>The loop</h3>
+        <svg class="dia" viewBox="0 0 330 262" role="img" aria-label="The working loop: pick a prompt, agent reads and plans, you approve, agent builds, agent shows proof, you check and commit.">
+          <circle cx="165" cy="131" r="92" fill="none" stroke="#9fd8cf" stroke-width="2" stroke-dasharray="2 5"/>
+          <g font-size="9.5" text-anchor="middle">
+            <g><rect x="105" y="4" width="120" height="40" rx="9" fill="#0f766e"/><text x="165" y="21" fill="#fff" font-weight="700">1 · Pick a prompt</text><text x="165" y="35" fill="#ccfbf1">fill in the &lt;blanks&gt;</text></g>
+            <g><rect x="206" y="64" width="122" height="40" rx="9" fill="#fff" stroke="#cbd5e1"/><text x="267" y="81" fill="#16212c" font-weight="700">2 · Agent reads, plans</text><text x="267" y="95" fill="#5a6777">files it will touch, and why</text></g>
+            <g><rect x="206" y="158" width="122" height="40" rx="9" fill="#fff4dd" stroke="#f59e0b"/><text x="267" y="175" fill="#7c3d06" font-weight="700">3 · You OK the plan</text><text x="267" y="189" fill="#7c3d06">or correct it now</text></g>
+            <g><rect x="105" y="218" width="120" height="40" rx="9" fill="#fff" stroke="#cbd5e1"/><text x="165" y="235" fill="#16212c" font-weight="700">4 · Agent builds</text><text x="165" y="249" fill="#5a6777">on its own branch</text></g>
+            <g><rect x="2" y="158" width="122" height="40" rx="9" fill="#fff" stroke="#cbd5e1"/><text x="63" y="175" fill="#16212c" font-weight="700">5 · Agent shows proof</text><text x="63" y="189" fill="#5a6777">screenshots, build, checks</text></g>
+            <g><rect x="2" y="64" width="122" height="40" rx="9" fill="#fff4dd" stroke="#f59e0b"/><text x="63" y="81" fill="#7c3d06" font-weight="700">6 · You look, commit</text><text x="63" y="95" fill="#7c3d06">then the next prompt</text></g>
+          </g>
+          <g stroke="#0f766e" stroke-width="1.6" fill="none">
+            <path d="M226 36 Q 255 44 262 61" marker-end="url(#ahT)"/>
+            <path d="M267 106 V 155" marker-end="url(#ahT)"/>
+            <path d="M262 200 Q 255 220 228 228" marker-end="url(#ahT)"/>
+            <path d="M104 228 Q 75 220 68 201" marker-end="url(#ahT)"/>
+            <path d="M63 156 V 107" marker-end="url(#ahT)"/>
+            <path d="M68 62 Q 75 44 103 36" marker-end="url(#ahT)"/>
+          </g>
+          <text x="165" y="127" font-size="10" text-anchor="middle" font-weight="700" fill="#0f766e">One capability</text>
+          <text x="165" y="141" font-size="10" text-anchor="middle" font-weight="700" fill="#0f766e">per trip round</text>
+        </svg>
+      </div>
+    </div>
+
+    <h2 style="margin-top:14px">The house rules, in short</h2>
+    <div class="cols">
+      <ul class="dots small">
+        <li><b>Nothing real in the repo:</b> no secrets, real hostnames, internal addresses or real data in code, docs, commits or screenshots. Placeholders only.</li>
+        <li><b>Never ask for a key in the chat.</b> Use, or write, a single-purpose script that reads it at run time (chapter 8).</li>
+        <li><b>Map UI rules:</b> menus portaled, strings escaped, overlays beside the map, the z-index ladder kept up to date.</li>
+      </ul>
+      <ul class="dots small">
+        <li><b>Mobile first:</b> every page at 320, 390, 844 × 390 and 1280, with a real viewport. Targets of 44 px.</li>
+        <li><b>Definition of done:</b> the type check and build pass, <code>docker build .</code> passes, and screenshots at four sizes are in <code>outbox/</code>.</li>
+        <li><b>Safety:</b> work on a branch. Never deploy, change production or spend money without your OK in that session.</li>
+      </ul>
+    </div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>prompts/README.md</code></span><span class="chip"><b>Read</b><code>docs/10-lessons-learned.md</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 18 · CH12 prompts ============================== -->
+<section class="page">
+  <div class="runhead"><span><b>12</b> · Building it with an AI agent</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap cont"><div class="num">12</div><div><h1>The sixteen prompts</h1><p class="lede">One copy-paste prompt per capability, in <code>prompts/</code>. Each names the docs to read first.</p></div></header>
+
+    <table class="t tight" style="font-size:8.5pt">
+      <tr><th style="width:5%">#</th><th style="width:27%">Prompt</th><th>Builds</th><th style="width:15%">Needs</th></tr>
+      <tr><td>01</td><td>Start a new map app</td><td>The repo, client and server, Home and the map, satellite basemap, health and about</td><td>nothing</td></tr>
+      <tr><td>02</td><td>Add a layer</td><td>A switchable layer with legend, labels, tooltips and its state in the address</td><td>01</td></tr>
+      <tr><td>03</td><td>Slide-out panel</td><td>The layers drawer on the left, the list and details on the right</td><td>01</td></tr>
+      <tr><td>04</td><td>User menu that stays on top</td><td>The portaled avatar menu: About, feedback, Clear cache &amp; reload</td><td>01</td></tr>
+      <tr><td>05</td><td>Custom icons</td><td>Machine clip art, tile icons, a generated app icon set</td><td>01</td></tr>
+      <tr><td>06</td><td>Public share link</td><td>The tiny <code>/s/&lt;token&gt;</code> viewer, the token list, several designs per link</td><td>01</td></tr>
+      <tr><td>07</td><td>Signed-in-only data</td><td>The <code>/m/&lt;id&gt;</code> viewer for staff, and private extras on public links</td><td>06, 11 or 16</td></tr>
+      <tr><td>08</td><td>GeoJSON build tool</td><td>A safe, repeatable Python tool from downloaded files to GeoJSON</td><td>nothing</td></tr>
+      <tr><td>09</td><td>Mobile pass</td><td>Fixes at 320, 390, landscape and desktop, with screenshots</td><td>any page</td></tr>
+      <tr><td>10</td><td>Dockerize + CI + Portainer</td><td>The Dockerfile, GitHub Actions to GHCR, an image-only compose file, health checks</td><td>01</td></tr>
+      <tr><td>11</td><td>OIDC login</td><td>The deeper sign-in: tokens in memory, refresh, back-channel logout, failing closed</td><td>01</td></tr>
+      <tr><td>12</td><td>Review and verify</td><td>A read-only audit: security, privacy, layering, mobile, caching, build</td><td>anything</td></tr>
+      <tr><td style="color:var(--amber)">13</td><td>Host on DigitalOcean</td><td>A droplet with firewall, reserved IP, DNS and Caddy, after a dry run you approve</td><td>10</td></tr>
+      <tr><td style="color:var(--amber)">14</td><td>Key-safe scripts</td><td>One single-purpose script per job, plus repo hygiene and the scan before every push</td><td>nothing</td></tr>
+      <tr><td style="color:var(--amber)">15</td><td>HTTPS with Caddy</td><td>The front door (or one more site on it), the Cloudflare settings, checks from outside</td><td>an app on a server</td></tr>
+      <tr><td style="color:var(--amber)">16</td><td>Login with Authentik</td><td>Authentik if you need it, then simple session sign-in (or forward auth) that fails closed</td><td>01</td></tr>
+    </table>
+
+    <div class="grid2" style="grid-template-columns:1.25fr 1fr;margin-top:4px">
+      <div class="card soft"><p class="xs muted" style="margin:0 0 6px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--teal)">A new app</p>
+        <div class="flow"><span class="s">01</span><span class="a">→</span><span class="s">02</span><span class="a">→</span><span class="s">03</span><span class="a">→</span><span class="s">04</span><span class="a">→</span><span class="s">16</span><span class="a">→</span><span class="s">10</span><span class="a">→</span><span class="s">09</span><span class="a">→</span><span class="s">12</span></div>
+        <p class="xs" style="margin:6px 0 0">Then 05, 06, 07 and 08 as you need them.</p></div>
+      <div class="card soft"><p class="xs muted" style="margin:0 0 6px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--amber)">Putting it online</p>
+        <div class="flow"><span class="s alt">14</span><span class="a">→</span><span class="s alt">15</span><span class="a">or</span><span class="s alt">13</span><span class="a">→</span><span class="s alt">12</span></div>
+        <p class="xs" style="margin:6px 0 0">Keys first, so none ever goes through the chat. 15 for your own server, 13 for a droplet. Then review the live site.</p></div>
+    </div>
+
+    <div class="cols" style="margin-top:10px">
+      <div>
+        <h3>16 or 11?</h3>
+        <p class="small">Prompt 16 is the simpler sign-in: the server keeps you signed in with a cookie, exactly like the demo's <code>example/server/</code>. Prompt 11 is the deeper version our field map uses, with tokens kept in memory. Start with 16.</p>
+      </div>
+      <div>
+        <h3>Tips that save sessions</h3>
+        <ul class="dots small">
+          <li><b>Name the doc:</b> "Read docs/playbook/03-menus-on-top.md first" beats "make the menu stay on top".</li>
+          <li><b>Ask for the plan first</b> on anything big.</li>
+          <li><b>Make it show you:</b> screenshots, the build output, <code>curl /health</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="more"><span class="chip"><b>Read</b><code>prompts/README.md</code></span><span class="chip"><b>Prompt</b><code>12-review-and-verify</code></span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 19 · CH12c ============================== -->
+<section class="page">
+  <div class="runhead"><span><b>12</b> · Building it with an AI agent</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap cont"><div class="num">12</div><div><h1>A worked example: adding a layer</h1><p class="lede">What one round of the loop looks like, using prompt 02 to add soil sample points to a map. The conversation is shortened, and the data is invented.</p></div></header>
+
+    <div style="display:grid;grid-template-columns:1fr 2.15in;column-gap:22px">
+      <div class="chat">
+        <div class="step-tag">1 · Pick a prompt, fill the blanks</div>
+        <div class="msg you"><div class="who">You</div>New branch, please: <code>layer-soil-samples</code>. Then: <i>Add a new map layer called "Soil samples" that shows sample points coloured by pH, from <code>data/maps/soil-2026.geojson</code>…</i> (the rest of prompt 02, pasted as is)</div>
+        <div class="step-tag">2 · The agent reads, then plans</div>
+        <div class="msg bot"><div class="who">Agent</div>I read <code>docs/playbook/02-the-map-page.md</code> sections 4, 6, 9 and 13. Plan:
+          <ul>
+            <li><code>layers/SoilSamplesLayer.tsx</code> (new): dots in their own pane, under the machines</li>
+            <li><code>shared/legends.ts</code>: one pH legend, used by the dots <b>and</b> the legend</li>
+            <li><code>LayersDrawer.tsx</code>: a switch with a purple accent bar</li>
+            <li>Starts off; the file loads the first time it's switched on</li>
+          </ul>
+          One question: should labels show the sample ID or the pH value?</div>
+        <div class="step-tag">3 · You OK the plan</div>
+        <div class="msg you"><div class="who">You</div>The pH value. Go.</div>
+        <div class="step-tag">4 and 5 · It builds, then shows proof</div>
+        <div class="msg bot"><div class="who">Agent</div>Done. Acceptance checks:
+          <ul class="ticks">
+            <li><span class="tick">✓</span> the switch works, and Back and refresh keep it (<code>?layers=…,soil</code>)</li>
+            <li><span class="tick">✓</span> labels appear from zoom 14 and don't block taps</li>
+            <li><span class="tick">✓</span> a name containing <code>&lt;b&gt;x&lt;/b&gt;</code> shows as text, not bold</li>
+            <li><span class="tick">✓</span> 20 on/off toggles leave no extra panes or layers behind</li>
+          </ul>
+          <code>npm run build</code> and <code>docker build .</code> pass. Screenshots at 320, 390, 844 × 390 and 1280 are in <code>outbox/</code>.</div>
+        <div class="step-tag">6 · You look, and you're the one who decides</div>
+        <div class="msg you"><div class="who">You</div>At 320 wide the legend covers the My location button. Fix that, and send the 320 screenshot again.</div>
+        <div class="msg bot"><div class="who">Agent</div>Fixed: the legend folds away under 360 px. New screenshot in <code>outbox/</code>. Shall I commit?</div>
+        <div class="msg you"><div class="who">You</div>Yes. Commit, push the branch, open a pull request.</div>
+      </div>
+      <div>
+        <div class="card teal" style="margin-bottom:10px"><h4>Why it went well</h4>
+          <ul class="dots small" style="margin:4px 0 0">
+            <li><b>The doc was named,</b> so the agent followed our patterns instead of inventing new ones.</li>
+            <li><b>The plan came first,</b> and the question got answered before any code.</li>
+            <li><b>"Done" came with proof:</b> checks, a build, screenshots.</li>
+            <li><b>You looked</b> at the smallest screen, and caught what the checks missed.</li>
+          </ul></div>
+        <div class="callout trap"><span class="t">Watch for "simpler"</span>If the agent offers to "simplify" something, check it isn't removing a pattern on purpose: the portal, the safe areas, <code>esc()</code>, the fail-closed check.</div>
+        <div class="callout note"><span class="t">Going in circles?</span>Commit what works, start a fresh session, and paste the prompt again with a note about what's left.</div>
+        <div class="callout never"><span class="t">Never</span>Paste a key into the chat, even "just this once". If the agent asks for one, point it at prompt 14.</div>
+      </div>
+    </div>
+
+    <div class="more"><span class="chip"><b>Prompt</b><code>02-add-a-layer</code></span><span class="chip"><b>Read</b><code>prompts/README.md</code> "Tips"</span></div>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<!-- ============================== 20 · LAST ============================== -->
+<section class="page" id="last">
+  <div class="runhead"><span>If you remember nothing else</span><span>How our maps work</span></div>
+  <div class="content">
+    <header class="chap"><div class="num" style="font-size:36pt">✓</div><div><h1>If you remember nothing else</h1><p class="lede">Almost every item here broke in one of our apps. The fixes are in the docs, and the prompts already ask for them.</p></div></header>
+
+    <ol class="top10">
+      <li><b>Portal every menu into <code>&lt;body&gt;</code></b> at z 9998 / 9999. Raising the z-index alone never sticks.</li>
+      <li><b>Fail closed.</b> Production refuses to start without its login settings, and secrets in compose use <code>${VAR:?}</code>.</li>
+      <li><b>A scripted redeploy must send the settings back,</b> or it wipes every secret. Use <code>redeploy.py</code>.</li>
+      <li><b>Give the agent scripts, not keys.</b> A key pasted into a chat is a leaked key: revoke it.</li>
+      <li><b>Escape every string</b> that goes into map HTML.</li>
+      <li><b>Check 320, 390, 844 × 390 and 1280,</b> with a real viewport, and on a real phone.</li>
+      <li><b>Tell Leaflet when its box changes size.</b> It measures once.</li>
+      <li><b>Never cache the page shell or <code>/api/*</code></b> in a service worker of an online app. White screens and broken logouts came from there.</li>
+      <li><b>Build the Docker image and open the app in a browser</b> before you call anything done.</li>
+      <li><b>Cloudflare SSL mode is Full (strict).</b> Never Flexible.</li>
+      <li><b>Attach droplet firewalls by tag,</b> and release reserved IPs you no longer use.</li>
+      <li><b>No real tokens, hostnames or data in a public repo,</b> including its history. Scan before you push.</li>
+    </ol>
+
+    <div class="cols w40" style="margin-top:16px;column-gap:22px;align-items:start">
+      <div>
+        <h3>Where everything lives</h3>
+<pre class="tree"><b>react-maps-playbook/</b>
+├── README.md      <i>start here</i>
+├── LICENSE        <i>MIT</i>
+├── <b>docs/</b>          <i>the why, with code</i>
+│   ├── 01–10      <i>the app itself</i>
+│   ├── 11–14      <i>hosting, keys,</i>
+│   │              <i>HTTPS, login</i>
+│   └── guide/     <i>this guide's source</i>
+├── <b>prompts/</b>       <i>16 copy-paste prompts</i>
+├── <b>example/</b>       <i>the runnable demo</i>
+│   └── server/    <i>optional sign-in</i>
+├── <b>scripts/</b>       <i>key-safe helpers</i>
+└── <b>infra/</b>         <i>Caddy and Authentik</i></pre>
+      </div>
+      <div>
+        <h3>Try the demo in two minutes</h3>
+        <pre class="code"><span class="p">$</span> cd example
+<span class="p">$</span> npm install
+<span class="p">$</span> npm run dev
+<span class="c">  open http://localhost:5173, then try:</span>
+<span class="o">  /?color=status</span>                      <span class="c">fields by harvest status</span>
+<span class="o">  /?layers=fields,labels,equipment,grid</span>  <span class="c">all four layers</span>
+<span class="o">  /s/demo-7k2m9q4x8p</span>                  <span class="c">the sample share link</span></pre>
+        <div class="card teal" style="margin-top:10px">
+          <h4>Your first session with an agent</h4>
+          <p>Paste the house rules into <code>CLAUDE.md</code>. Start an empty repo. Run prompt 01 and ask for the plan first. When the skeleton runs and you've seen it on your phone, commit it, and pick the next prompt.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout never" style="margin-top:14px"><span class="t">Before anything goes public</span>No secrets or <code>.env</code> files. No real share tokens. No real hostnames, internal addresses or admin URLs. No real data in code, sample files or screenshots, and nothing private baked into a public image. Scan the whole history, not just today's files, or better, start a fresh public repo and copy in only what you mean to share.</div>
+
+    <p class="xs muted" style="margin-top:auto;padding-top:12px;border-top:1px solid var(--line)">Every map, name, number and screenshot in this guide is invented demo data, drawn on a synthetic basemap with no real places. Hostnames such as <code>example.com</code> are reserved for documentation (RFC 2606), and <code>203.0.113.0/24</code> is a documentation address range, so nothing here points at a real server. Replace them with your own before you run anything. When you run the demo, its basemap is © OpenStreetMap contributors.</p>
+  </div>
+  <div class="folio"><span>How our maps work</span><span class="n"></span></div>
+</section>
+
+<script>
+  // Flags any page whose content doesn't fit: <html data-overflow="7:v18 h:pre.code+6"> (read by the
+  // build check), and a red outline when opened with ?debug.
+  window.addEventListener('load', function () {
+    var bad = [];
+    document.querySelectorAll('.page').forEach(function (p, i) {
+      var c = p.querySelector('.content');
+      if (!c) return;
+      var notes = [], pr = c.getBoundingClientRect();
+      var v = c.scrollHeight - c.clientHeight;
+      if (v > 1) notes.push('v' + v);
+      c.querySelectorAll('*').forEach(function (el) {
+        var r = el.getBoundingClientRect();
+        if (r.width && r.right > pr.right + 1.5) notes.push('h:' + el.tagName.toLowerCase() + (el.className && el.className.baseVal === undefined ? '.' + String(el.className).split(' ')[0] : '') + '+' + Math.round(r.right - pr.right));
+      });
+      c.querySelectorAll('pre, .tree').forEach(function (el) {
+        if (el.scrollWidth > el.clientWidth + 1) notes.push('clip:' + el.tagName.toLowerCase() + '+' + (el.scrollWidth - el.clientWidth));
+      });
+      if (notes.length) { bad.push((i + 1) + ':' + notes.slice(0, 4).join(' ')); if (location.search.indexOf('debug') >= 0) p.classList.add('overflowing'); }
+    });
+    document.documentElement.setAttribute('data-overflow', bad.length ? bad.join(' | ') : 'none');
+  });
+</script>
+</body>
+</html>

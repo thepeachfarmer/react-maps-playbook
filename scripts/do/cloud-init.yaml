@@ -1,0 +1,151 @@
+#cloud-config
+# First-boot setup for a small Docker host (Ubuntu 24.04 on a DigitalOcean droplet).
+# It runs once, before you ever log in, and leaves you with:
+#   - security updates that install themselves, ufw + fail2ban, no password logins
+#   - Docker with log rotation and a weekly prune (the two classic disk-fillers)
+#   - a non-root user "app" (log in as app@<ip>; root SSH is switched off once
+#     app has your keys)
+#   - the app running from /opt/app with docker compose: your image behind Caddy,
+#     which gets a real HTTPS certificate on its own once DNS points here
+#
+# provision-droplet.sh rewrites two lines in /opt/app/.env below (APP_IMAGE and
+# SITE_ADDRESS) before it sends this file. Pasted by hand, it uses the defaults
+# shown: the example image, plain HTTP on port 80.
+#
+# NEVER PUT SECRETS IN THIS FILE. User data is readable from inside the droplet
+# (the metadata service at 169.254.169.254) and in the DigitalOcean control
+# panel. Copy secrets over SSH afterwards (docs/11, "Secrets onto the box").
+
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+
+ssh_pwauth: false
+
+# No "- default" entry: DigitalOcean logs you in as root with the account SSH
+# keys you chose; we copy those keys to "app" below instead of making a third user.
+users:
+  - name: app
+    gecos: App deploy user
+    shell: /bin/bash
+    groups: [sudo]
+    # Passwordless sudo, because the account has no password at all (SSH keys
+    # only). Anyone who can log in as app can become root; so can anyone in the
+    # docker group. Treat this login like root.
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+
+write_files:
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+  # Cap container logs. Unrotated logs fill a small disk and stop every container.
+  - path: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "10m", "max-file": "3" }
+      }
+
+  # Old images pile up with every deploy. Prune anything unused for a week.
+  - path: /etc/cron.weekly/docker-prune
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      docker system prune -af --filter "until=168h" >/dev/null 2>&1 || true
+
+  # Compose settings for the app. Not secret. App secrets get appended later,
+  # over SSH, never through this file.
+  - path: /opt/app/.env
+    permissions: "0600"
+    content: |
+      COMPOSE_PROJECT_NAME=app
+      APP_IMAGE=ghcr.io/your-org/react-maps-example:latest
+      SITE_ADDRESS=:80
+
+  - path: /opt/app/docker-compose.yml
+    content: |
+      # Production compose: pulls images, never builds. Values come from .env.
+      services:
+        web:
+          image: ${APP_IMAGE:?set APP_IMAGE in /opt/app/.env}
+          restart: unless-stopped
+          # No ports: here on purpose. Only Caddy talks to the app, over the
+          # compose network. (Published ports skip ufw; see docs/11.)
+
+        caddy:
+          image: caddy:2.11-alpine
+          restart: unless-stopped
+          ports:
+            - "80:80"
+            - "443:443"
+          environment:
+            SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+          volumes:
+            - ./Caddyfile:/etc/caddy/Caddyfile:ro
+            - caddy_data:/data
+            - caddy_config:/config
+          depends_on:
+            - web
+
+      volumes:
+        caddy_data: {}
+        caddy_config: {}
+
+  # SITE_ADDRESS is a hostname (HTTPS with an automatic certificate) or ":80"
+  # (plain HTTP, for a first test before DNS points here). docs/13 has more.
+  # "web:80" fits the example's default nginx image. An image that listens on
+  # another port (the example's --target server image, or a Node app, on 3000)
+  # needs "web:3000" here, or every request is a 502.
+  # Indented with spaces, not tabs, to keep the YAML simple; Caddy only logs a
+  # harmless "not formatted" note about that.
+  - path: /opt/app/Caddyfile
+    content: |
+      {$SITE_ADDRESS} {
+          encode zstd gzip
+          reverse_proxy web:80
+      }
+
+runcmd:
+  # FIRST: give "app" the same SSH keys DigitalOcean put on root, then turn off
+  # root SSH. The check means a missing key can't lock you out of both accounts.
+  # This runs before the Docker install so you can log in as app sooner. Until
+  # it has run (package updates come first), "ssh app@<ip>" answers
+  # "Permission denied (publickey)" or "Connection refused". That's normal: retry.
+  - install -d -m 700 -o app -g app /home/app/.ssh
+  - sh -c 'grep -E "^(ssh-|ecdsa-|sk-)" /root/.ssh/authorized_keys > /home/app/.ssh/authorized_keys; chown app:app /home/app/.ssh/authorized_keys; chmod 600 /home/app/.ssh/authorized_keys'
+  - sh -c 'if [ -s /home/app/.ssh/authorized_keys ]; then printf "PermitRootLogin no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n" > /etc/ssh/sshd_config.d/00-hardening.conf; else echo "app has no SSH keys; leaving root login on"; fi; systemctl restart ssh || systemctl restart sshd'
+
+  # Docker, from Docker's own install script.
+  - sh -c 'curl -fsSL https://get.docker.com | sh'
+  - usermod -aG docker app
+  - systemctl enable --now docker
+
+  # Host firewall. The DigitalOcean cloud firewall is the main one (it sits
+  # outside the box); this one still protects the box if that is ever detached.
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
+  - systemctl enable --now fail2ban
+
+  # A little swap, so a memory spike slows the box down instead of having the
+  # kernel kill a container.
+  - sh -c '[ -f /swapfile ] || { fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo "/swapfile none swap sw 0 0" >> /etc/fstab; }'
+
+  # Start the app. A private image fails to pull here; log in to the registry
+  # over SSH afterwards and run `docker compose up -d` in /opt/app (docs/11).
+  - chown -R app:app /opt/app
+  - sh -c 'cd /opt/app && docker compose pull && docker compose up -d || echo "app not started yet; see docs/11"'
+
+final_message: "cloud-init finished after $UPTIME seconds"

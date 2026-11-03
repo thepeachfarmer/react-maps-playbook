@@ -1,0 +1,12 @@
+# Local development only. `docker compose up --build` merges this file into
+# docker-compose.yml automatically; a production stack that names only
+# docker-compose.yml ignores it.
+services:
+  web:
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-1.0.dev}
+        COMMIT_SHA: ${COMMIT_SHA:-local}
+        BUILT_AT: ${BUILT_AT:-local}
+    image: react-maps-example:local

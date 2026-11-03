@@ -1,0 +1,12 @@
+# Real secrets live in .env next to the compose file. Never commit it.
+.env
+.env.*
+!.env.example
+*.env
+
+# Your real Caddyfile holds your real hostnames. In this public folder it stays
+# out of git: copy Caddyfile.example to conf/Caddyfile and edit it there.
+# (In your own PRIVATE edge repo, where CI bakes conf/Caddyfile into the image,
+# delete these two lines so the Caddyfile is committed.)
+conf/
+Caddyfile

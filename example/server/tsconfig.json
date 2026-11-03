@@ -1,0 +1,17 @@
+{
+  // Type-checks the server's plain JavaScript (JSDoc types, // @ts-check).
+  // There is no build step: Node runs server/*.js as they are.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["*.js", "*.d.ts"]
+}

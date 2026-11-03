@@ -1,0 +1,22 @@
+# dependencies and build output
+node_modules/
+dist/
+*.tsbuildinfo
+
+# secrets and local config: never commit
+.env
+.env.*
+!.env.example
+*.env
+# anchored: a bare "secrets/" would also ignore scripts/secrets/ if you add the playbook's scripts
+/secrets/
+*.pem
+*.key
+*-service-account.json
+
+# local scratch: what you drop for the agent, and what it makes for you
+# (screenshots of a real app land in outbox/)
+inbox/
+outbox/
+*.log
+.DS_Store

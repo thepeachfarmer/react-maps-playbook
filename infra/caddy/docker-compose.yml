@@ -1,0 +1,48 @@
+# Caddy, the front door: the only container on ports 80 and 443.
+# README.md in this folder walks through it; docs/13-https-with-caddy.md explains why.
+#
+# Layout next to this file:
+#   conf/Caddyfile   copied from Caddyfile.example and edited (gitignored here)
+#   .env             only for the Cloudflare variant (gitignored)
+#
+# First start:
+#   docker network create edge        # once per host; Authentik and some apps join it too
+#   docker compose config --quiet && docker compose up -d
+#   docker compose logs -f caddy      # look for "certificate obtained successfully"
+
+services:
+  caddy:
+    # Plain Caddy (sections 1 to 3 of Caddyfile.example).
+    image: caddy:2.11-alpine
+    # Cloudflare DNS-01 wildcard (section 4) instead: use your own build with the
+    # plugin (README.md, "Behind Cloudflare"), and uncomment the token below.
+    # image: ghcr.io/<owner>/caddy-cloudflare:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"          # HTTP/3
+    extra_hosts:
+      # Lets the Caddyfile say host.docker.internal:8080 for apps that publish
+      # a port on this host.
+      - "host.docker.internal:host-gateway"
+    # environment:
+    #   # Required for DNS-01: compose refuses to start without it, instead of
+    #   # starting Caddy with an empty token that fails every renewal.
+    #   CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?Set CLOUDFLARE_API_TOKEN in .env or the stack env}
+    volumes:
+      # The FOLDER, not the single file: editors save by writing a new file,
+      # and a single-file bind mount keeps showing Caddy the old one.
+      - ./conf:/etc/caddy:ro
+      - caddy_data:/data       # certificates and the ACME account. Never delete it.
+      - caddy_config:/config
+    networks:
+      - edge
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+
+networks:
+  edge:
+    external: true             # docker network create edge   (once per host)

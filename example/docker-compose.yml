@@ -1,0 +1,33 @@
+# Production-style compose file: it pulls a pre-built image and never builds.
+# (A Portainer "stack from Git" agent can't build images, and the server
+# should only run what CI built.) For local builds, docker-compose.override.yml
+# adds `build: .` and is picked up automatically by `docker compose up`.
+#
+# Values come from ${VAR} substitution. Portainer and most hosts pass stack
+# environment variables into this substitution; they do NOT ship your .env
+# file, so `env_file: .env` would silently be empty in production.
+#   ${VAR:-default}  safe defaults only (ports, tags, public names)
+#   ${VAR:?message}  for anything secret: refuse to start if it's missing
+# This demo has no secrets, so everything here has a dummy default.
+
+services:
+  web:
+    image: ${IMAGE:-ghcr.io/your-org/react-maps-example}:${IMAGE_TAG:-latest}
+    ports:
+      - "${HOST_PORT:-8080}:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # A real app adds its API and database here, each with a healthcheck, e.g.
+  #   api:
+  #     image: ghcr.io/your-org/your-api:${IMAGE_TAG:-latest}
+  #     environment:
+  #       DATABASE_URL: postgresql://${POSTGRES_USER:?set it}:${POSTGRES_PASSWORD:?set it}@db:5432/app
+  #     depends_on: { db: { condition: service_healthy } }
+  #   db:
+  #     image: postgis/postgis:16-3.4
+  #     volumes: [pgdata:/var/lib/postgresql/data]

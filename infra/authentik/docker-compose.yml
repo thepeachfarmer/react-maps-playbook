@@ -1,0 +1,130 @@
+# Authentik: the identity provider (the "Sign in with..." server) for all of
+# your apps. One per organisation, not one per app.
+#
+# Three containers:
+#   authentik-db      PostgreSQL. Users, groups, apps, flows, passkeys. Back it up.
+#   authentik-server  The web UI and the OIDC endpoints, on port 9000 inside Docker.
+#   authentik-worker  Background jobs: email, cleanup, certificate discovery.
+#
+# There's no Redis. Authentik stopped using it in 2025.10. Older guides still
+# show a redis service; you can leave it out.
+#
+# First run (details in README.md next to this file):
+#   cp .env.example .env               then fill in PG_PASS and AUTHENTIK_SECRET_KEY
+#   docker network create edge         once per host; Caddy joins the same network
+#   docker compose up -d
+#   open https://auth.example.com/if/flow/initial-setup/   straight away
+#
+# Values come from ${VAR} substitution: from .env on a plain host, or from the
+# stack's environment variables in Portainer (which does NOT read .env files).
+# The secrets use ${VAR:?}, so a lost environment stops the deploy with a clear
+# message instead of starting Authentik with an empty password.
+
+services:
+  authentik-db:
+    # Pin the version. Minor updates (16.x) are safe to take; a new major
+    # version (17) needs a dump and restore first.
+    image: docker.io/library/postgres:16.14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PG_DB:-authentik}
+      POSTGRES_USER: ${PG_USER:-authentik}
+      POSTGRES_PASSWORD: ${PG_PASS:?PG_PASS must be set. Generate one with openssl rand -base64 36}
+    volumes:
+      - authentik-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # Only on the stack's own network. Nothing outside this stack talks to it.
+
+  authentik-server:
+    # Pin the release and upgrade on purpose, one release at a time, after
+    # reading its "Breaking changes" and taking a database backup.
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG:-2026.8.5}
+    command: server
+    restart: unless-stopped
+    environment:
+      # Signs sessions and tokens. Set it once and never change it.
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?AUTHENTIK_SECRET_KEY must be set. Generate one with openssl rand -base64 60}
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB:-authentik}
+      AUTHENTIK_POSTGRESQL__USER: ${PG_USER:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS:?PG_PASS must be set. Generate one with openssl rand -base64 36}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      # Email, for password recovery and admin alerts. Optional; see .env.example.
+      # AUTHENTIK_EMAIL__HOST: ${SMTP_HOST:?}
+      # AUTHENTIK_EMAIL__PORT: ${SMTP_PORT:-587}
+      # AUTHENTIK_EMAIL__USERNAME: ${SMTP_USER:?}
+      # AUTHENTIK_EMAIL__PASSWORD: ${SMTP_PASS:?}
+      # AUTHENTIK_EMAIL__USE_TLS: "true"
+      # AUTHENTIK_EMAIL__FROM: ${SMTP_FROM:?}
+    volumes:
+      # Uploaded logos and other files. A named volume, not ./data, so it
+      # works the same under Portainer.
+      - authentik-data:/data
+    shm_size: 512mb
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "ak", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - default
+      # Caddy reaches this container as authentik-server:9000 over the shared
+      # "edge" network. No port is published on the host.
+      - edge
+    # Setting up before Caddy and DNS are ready? Uncomment this, then from your
+    # laptop run: ssh -L 9000:127.0.0.1:9000 you@your-server
+    # and open http://localhost:9000/if/flow/initial-setup/
+    # ports:
+    #   - "127.0.0.1:9000:9000"
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG:-2026.8.5}
+    command: worker
+    restart: unless-stopped
+    # Starts as root only to fix file ownership on /data and /certs, then
+    # drops to the unprivileged authentik user. The official compose file also
+    # mounts /var/run/docker.sock here so Authentik can create extra outposts.
+    # We leave that out: the built-in (embedded) outpost is enough, and the
+    # Docker socket is root access to the whole host.
+    user: root
+    environment:
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?AUTHENTIK_SECRET_KEY must be set. Generate one with openssl rand -base64 60}
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB:-authentik}
+      AUTHENTIK_POSTGRESQL__USER: ${PG_USER:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS:?PG_PASS must be set. Generate one with openssl rand -base64 36}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      # Same email settings as the server, if you use them.
+    volumes:
+      - authentik-data:/data
+      - authentik-certs:/certs
+    shm_size: 512mb
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "ak", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  authentik-db: {}
+  authentik-data: {}
+  authentik-certs: {}
+
+networks:
+  # Shared with Caddy (and any app Caddy reaches by container name).
+  # Create it once per host: docker network create edge
+  edge:
+    external: true
